@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     strategy:
-      fail-fast: true
+      # fail-fast: true
       matrix:
         platform:
           - os_name: Linux-x86_64
@@ -31,7 +31,7 @@ jobs:
           targets: ${{ matrix.platform.target }}
 
       - name: Install needed packages on Linux
-        run: sudo apt-get update --yes && sudo apt-get install --yes libssl-dev pkg-config
+        run: sudo apt-get update --yes && sudo apt-get install --yes libssl-dev libdbus-1-dev pkg-config
         if: contains(matrix.platform.os, 'ubuntu')
 
       - name: Install mold linker
