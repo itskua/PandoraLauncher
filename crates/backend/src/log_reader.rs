@@ -241,7 +241,7 @@ pub fn start_game_output(stdout: ChildStdout, stderr: Option<ChildStderr>, sende
                                     }
                                 }
                                 if let Some(throwable) = throwable.as_mut() {
-                                    let mut replaced = replace(&**throwable);
+                                    let replaced = replace(&**throwable);
                                     if let Cow::Owned(replaced) = replaced {
                                         *throwable = replaced.into();
                                     }
@@ -393,7 +393,7 @@ pub fn start_game_output(stdout: ChildStdout, stderr: Option<ChildStderr>, sende
                                 continue;
                             }
 
-                            let mut replaced = replace(trimmed);
+                            let replaced = replace(trimmed);
 
                             sender.send(MessageToFrontend::AddGameOutput {
                                 id,

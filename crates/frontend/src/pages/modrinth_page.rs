@@ -1,12 +1,12 @@
 use std::{ops::Range, sync::Arc, time::Duration};
 
-use bridge::{install::ContentType, instance::InstanceID, meta::MetadataRequest};
+use bridge::{instance::InstanceID, meta::MetadataRequest};
 use gpui::{prelude::*, *};
 use gpui_component::{
     breadcrumb::Breadcrumb, button::{Button, ButtonGroup, ButtonVariants}, h_flex, input::{Input, InputEvent, InputState}, notification::NotificationType, scroll::{Scrollbar, ScrollbarState}, skeleton::Skeleton, v_flex, ActiveTheme, Icon, IconName, Selectable, StyledExt, WindowExt
 };
 use schema::modrinth::{
-    ModrinthHit, ModrinthSearchRequest, ModrinthSearchResult, ModrinthSideRequirement
+    ModrinthHit, ModrinthProjectType, ModrinthSearchRequest, ModrinthSearchResult, ModrinthSideRequirement
 };
 
 use crate::{
@@ -14,15 +14,6 @@ use crate::{
         metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult}, DataEntities
     }, ts, ui
 };
-
-#[derive(PartialEq)]
-enum ProjectType {
-    Mod,
-    Modpack,
-    Resourcepack,
-    Shader,
-    Datapack,
-}
 
 pub struct ModrinthSearchPage {
     data: DataEntities,
@@ -35,7 +26,7 @@ pub struct ModrinthSearchPage {
     search_state: Entity<InputState>,
     _search_input_subscription: Subscription,
     _delayed_clear_task: Task<()>,
-    project_type: ProjectType,
+    project_type: ModrinthProjectType,
     last_search: Arc<str>,
     scroll_state: ScrollbarState,
     scroll_handle: UniformListScrollHandle,
@@ -60,7 +51,7 @@ impl ModrinthSearchPage {
             search_state,
             _search_input_subscription,
             _delayed_clear_task: Task::ready(()),
-            project_type: ProjectType::Mod,
+            project_type: ModrinthProjectType::Mod,
             last_search: Arc::from(""),
             scroll_state: ScrollbarState::default(),
             scroll_handle: UniformListScrollHandle::new(),
@@ -94,7 +85,7 @@ impl ModrinthSearchPage {
         self.reload(cx);
     }
 
-    fn set_project_type(&mut self, project_type: ProjectType, cx: &mut Context<Self>) {
+    fn set_project_type(&mut self, project_type: ModrinthProjectType, cx: &mut Context<Self>) {
         if self.project_type == project_type {
             return;
         }
@@ -134,11 +125,10 @@ impl ModrinthSearchPage {
         };
 
         let project_type = match self.project_type {
-            ProjectType::Mod => "mod",
-            ProjectType::Modpack => "modpack",
-            ProjectType::Resourcepack => "resourcepack",
-            ProjectType::Shader => "shader",
-            ProjectType::Datapack => "datapack",
+            ModrinthProjectType::Mod | ModrinthProjectType::Other => "mod",
+            ModrinthProjectType::Modpack => "modpack",
+            ModrinthProjectType::Resourcepack => "resourcepack",
+            ModrinthProjectType::Shader => "shader",
         };
 
         let offset = if self.pending_clear { 0 } else { self.hits.len() };
@@ -297,28 +287,14 @@ impl ModrinthSearchPage {
                                 let name = name.clone();
                                 let project_id = hit.project_id.clone();
                                 let install_for = self.install_for.clone();
-                                let content_type = match hit.project_type {
-                                    schema::modrinth::ModrinthProjectType::Mod => {
-                                        Some(ContentType::Mod)
-                                    },
-                                    schema::modrinth::ModrinthProjectType::ModPack => {
-                                        Some(ContentType::Modpack)
-                                    },
-                                    schema::modrinth::ModrinthProjectType::ResourcePack => {
-                                        Some(ContentType::Resourcepack)
-                                    },
-                                    schema::modrinth::ModrinthProjectType::Shader => {
-                                        Some(ContentType::Shader)
-                                    },
-                                    _ => None,
-                                };
+                                let project_type = hit.project_type;
 
                                 move |_, window, cx| {
-                                    if let Some(content_type) = content_type {
+                                    if project_type != ModrinthProjectType::Other {
                                         crate::modals::modrinth_install::open(
                                             name.as_str(),
                                             project_id.clone(),
-                                            content_type,
+                                            project_type,
                                             install_for,
                                             &data,
                                             window,
@@ -445,24 +421,23 @@ impl Render for ModrinthSearchPage {
         let type_button_group = ButtonGroup::new("type")
             .layout(Axis::Vertical)
             .outline()
-            .child(Button::new("mods").label("Mods").selected(self.project_type == ProjectType::Mod))
+            .child(Button::new("mods").label("Mods").selected(self.project_type == ModrinthProjectType::Mod))
             .child(
                 Button::new("modpacks")
                     .label("Modpacks")
-                    .selected(self.project_type == ProjectType::Modpack),
+                    .selected(self.project_type == ModrinthProjectType::Modpack),
             )
             .child(
                 Button::new("resourcepacks")
                     .label("Resourcepacks")
-                    .selected(self.project_type == ProjectType::Resourcepack),
+                    .selected(self.project_type == ModrinthProjectType::Resourcepack),
             )
-            .child(Button::new("shaders").label("Shaders").selected(self.project_type == ProjectType::Shader))
+            .child(Button::new("shaders").label("Shaders").selected(self.project_type == ModrinthProjectType::Shader))
             .on_click(cx.listener(|page, clicked: &Vec<usize>, _, cx| match clicked[0] {
-                0 => page.set_project_type(ProjectType::Mod, cx),
-                1 => page.set_project_type(ProjectType::Modpack, cx),
-                2 => page.set_project_type(ProjectType::Resourcepack, cx),
-                3 => page.set_project_type(ProjectType::Shader, cx),
-                4 => page.set_project_type(ProjectType::Datapack, cx),
+                0 => page.set_project_type(ModrinthProjectType::Mod, cx),
+                1 => page.set_project_type(ModrinthProjectType::Modpack, cx),
+                2 => page.set_project_type(ModrinthProjectType::Resourcepack, cx),
+                3 => page.set_project_type(ModrinthProjectType::Shader, cx),
                 _ => {},
             }));
 

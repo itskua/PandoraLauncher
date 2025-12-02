@@ -43,6 +43,12 @@ pub enum MessageToBackend {
         mod_id: InstanceModID,
         enabled: bool,
     },
+    SetModChildEnabled {
+        id: InstanceID,
+        mod_id: InstanceModID,
+        path: Arc<str>,
+        enabled: bool,
+    },
     DeleteMod {
         id: InstanceID,
         mod_id: InstanceModID,
@@ -58,9 +64,6 @@ pub enum MessageToBackend {
     },
     DownloadAllMetadata,
     UpdateCheck { instance: InstanceID, modal_action: ModalAction },
-    FinishedLoadingWorlds { instance: InstanceID, serial: Serial },
-    FinishedLoadingServers { instance: InstanceID, serial: Serial },
-    FinishedLoadingMods { instance: InstanceID, serial: Serial },
     UpdateMod {
         instance: InstanceID,
         mod_id: InstanceModID,

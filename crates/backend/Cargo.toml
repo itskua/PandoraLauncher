@@ -41,3 +41,5 @@ indexmap.workspace = true
 serde_with.workspace = true
 once_cell.workspace = true
 tokio-util.workspace = true
+typed-path.workspace = true
+parking_lot.workspace = true

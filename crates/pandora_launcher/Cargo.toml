@@ -10,3 +10,4 @@ tracing-subscriber.workspace = true
 tokio.workspace = true
 bridge.workspace = true
 backtrace.workspace = true
+parking_lot.workspace = true

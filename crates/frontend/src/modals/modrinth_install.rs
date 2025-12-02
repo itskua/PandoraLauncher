@@ -1,6 +1,6 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::{cmp::Ordering, path::Path, sync::Arc};
 
-use bridge::{install::{ContentDownload, ContentInstall, ContentInstallFile, ContentType, InstallTarget}, instance::InstanceID, meta::MetadataRequest};
+use bridge::{install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::InstanceID, meta::MetadataRequest};
 use enumset::EnumSet;
 use gpui::{prelude::*, *};
 use gpui_component::{
@@ -16,7 +16,7 @@ use gpui_component::{
 use rustc_hash::FxHashMap;
 use schema::{
     content::ContentSource, loader::Loader, modrinth::{
-        ModrinthLoader, ModrinthProjectVersion, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionStatus, ModrinthVersionType
+        ModrinthLoader, ModrinthProjectType, ModrinthProjectVersion, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionStatus, ModrinthVersionType
     }
 };
 
@@ -37,7 +37,7 @@ struct InstallDialog {
     name: SharedString,
     project_versions: Arc<[ModrinthProjectVersion]>,
     data: DataEntities,
-    content_type: ContentType,
+    project_type: ModrinthProjectType,
 
     version_matrix: FxHashMap<&'static str, VersionMatrixLoaders>,
     instances: Option<Entity<SelectState<InstanceDropdown>>>,
@@ -61,7 +61,7 @@ struct InstallDialog {
 pub fn open(
     name: &str,
     project_id: Arc<str>,
-    content_type: ContentType,
+    project_type: ModrinthProjectType,
     install_for: Option<InstanceID>,
     data: &DataEntities,
     window: &mut Window,
@@ -75,13 +75,13 @@ pub fn open(
         cx,
     );
 
-    open_from_entity(title, project_versions, content_type, install_for, data.clone(), window, cx);
+    open_from_entity(title, project_versions, project_type, install_for, data.clone(), window, cx);
 }
 
 fn open_from_entity(
     title: SharedString,
     project_versions: Entity<FrontendMetadataState>,
-    content_type: ContentType,
+    project_type: ModrinthProjectType,
     install_for: Option<InstanceID>,
     data: DataEntities,
     window: &mut Window,
@@ -93,7 +93,7 @@ fn open_from_entity(
             let title2 = title.clone();
             let _subscription = window.observe(&project_versions, cx, move |project_versions, window, cx| {
                 window.close_all_dialogs(cx);
-                open_from_entity(title2.clone(), project_versions, content_type, install_for, data.clone(), window, cx);
+                open_from_entity(title2.clone(), project_versions, project_type, install_for, data.clone(), window, cx);
             });
             window.open_dialog(cx, move |dialog, _, _| {
                 let _ = &_subscription;
@@ -164,7 +164,7 @@ fn open_from_entity(
                 };
 
                 let mut valid_loader = true;
-                if content_type == ContentType::Mod || content_type == ContentType::Modpack {
+                if project_type == ModrinthProjectType::Mod || project_type == ModrinthProjectType::Modpack {
                     valid_loader = instance.loader == Loader::Vanilla
                         || loaders.loaders.contains(instance.loader.as_modrinth_loader());
                 }
@@ -177,8 +177,8 @@ fn open_from_entity(
                 let title = title.clone();
                 let instance_id = instance.id;
                 let fixed_minecraft_version = Some(instance.version.clone());
-                let fixed_loader = if (content_type == ContentType::Mod
-                    || content_type == ContentType::Modpack)
+                let fixed_loader = if (project_type == ModrinthProjectType::Mod
+                    || project_type == ModrinthProjectType::Modpack)
                     && instance.loader != Loader::Vanilla
                 {
                     Some(instance.loader.as_modrinth_loader())
@@ -189,7 +189,7 @@ fn open_from_entity(
                     name: title,
                     project_versions: valid_project_versions.into(),
                     data,
-                    content_type,
+                    project_type,
                     version_matrix,
                     instances: None,
                     unsupported_instances: 0,
@@ -217,7 +217,7 @@ fn open_from_entity(
 
                         if let Some(loaders) = version_matrix.get(instance.version.as_str()) {
                             let mut valid_loader = true;
-                            if content_type == ContentType::Mod || content_type == ContentType::Modpack {
+                            if project_type == ModrinthProjectType::Mod || project_type == ModrinthProjectType::Modpack {
                                 valid_loader = instance.loader == Loader::Vanilla
                                     || loaders.loaders.contains(instance.loader.as_modrinth_loader());
                             }
@@ -246,7 +246,7 @@ fn open_from_entity(
                     name: title,
                     project_versions: valid_project_versions.into(),
                     data,
-                    content_type,
+                    project_type,
                     version_matrix,
                     instances,
                     unsupported_instances,
@@ -289,17 +289,19 @@ impl InstallDialog {
         let modal = modal.title(self.name.clone());
 
         if self.target.is_none() {
-            let add_to_library_label = match self.content_type {
-                ContentType::Mod => "Add to mod library",
-                ContentType::Modpack => "Add to mod library",
-                ContentType::Resourcepack => "Add to resourcepack library",
-                ContentType::Shader => "Add to shader library",
+            let add_to_library_label = match self.project_type {
+                ModrinthProjectType::Mod => "Add to mod library",
+                ModrinthProjectType::Modpack => "Add to mod library",
+                ModrinthProjectType::Resourcepack => "Add to resourcepack library",
+                ModrinthProjectType::Shader => "Add to shader library",
+                ModrinthProjectType::Other => "Add to library",
             };
-            let create_instance_label = match self.content_type {
-                ContentType::Mod => "Create new instance with this mod",
-                ContentType::Modpack => "Create new instance with this modpack",
-                ContentType::Resourcepack => "Create new instance with this resourcepack",
-                ContentType::Shader => "Create new instance with this shader",
+            let create_instance_label = match self.project_type {
+                ModrinthProjectType::Mod => "Create new instance with this mod",
+                ModrinthProjectType::Modpack => "Create new instance with this modpack",
+                ModrinthProjectType::Resourcepack => "Create new instance with this resourcepack",
+                ModrinthProjectType::Shader => "Create new instance with this shader",
+                ModrinthProjectType::Other => "Create new instance with this file",
             };
 
             let content = v_flex()
@@ -328,8 +330,8 @@ impl InstallDialog {
                                 cx.listener(move |this, _, _, _| {
                                     this.target = Some(InstallTarget::Instance(instance.id));
                                     this.fixed_minecraft_version = Some(instance.version.clone());
-                                    if (this.content_type == ContentType::Mod
-                                        || this.content_type == ContentType::Modpack)
+                                    if (this.project_type == ModrinthProjectType::Mod
+                                        || this.project_type == ModrinthProjectType::Modpack)
                                         && instance.loader != Loader::Vanilla
                                     {
                                         this.fixed_loader = Some(instance.loader.as_modrinth_loader());
@@ -563,11 +565,12 @@ impl InstallDialog {
             .and_then(|state| state.read(cx).selected_value())
             .cloned();
 
-        let mod_version_prefix = match self.content_type {
-            ContentType::Mod => "Mod Version: ",
-            ContentType::Modpack => "Modpack version: ",
-            ContentType::Resourcepack => "Pack version: ",
-            ContentType::Shader => "Shader version: ",
+        let mod_version_prefix = match self.project_type {
+            ModrinthProjectType::Mod => "Mod Version: ",
+            ModrinthProjectType::Modpack => "Modpack version: ",
+            ModrinthProjectType::Resourcepack => "Pack version: ",
+            ModrinthProjectType::Shader => "Shader version: ",
+            ModrinthProjectType::Other => "File version: ",
         };
 
         let content = v_flex()
@@ -597,17 +600,24 @@ impl InstallDialog {
                                 .find(|file| file.primary)
                                 .unwrap_or(selected_mod_version.files.first().unwrap());
 
+                            let path = match this.project_type {
+                                ModrinthProjectType::Mod => Path::new("mods").join(&*install_file.filename),
+                                ModrinthProjectType::Modpack => Path::new("mods").join(&*install_file.filename),
+                                ModrinthProjectType::Resourcepack => Path::new("resourcepacks").join(&*install_file.filename),
+                                ModrinthProjectType::Shader => Path::new("shaderpacks").join(&*install_file.filename),
+                                ModrinthProjectType::Other => panic!("Don't know how to install this file type"),
+                            };
+
                             let content_install = ContentInstall {
                                 target: this.target.unwrap(),
                                 files: [ContentInstallFile {
-                                    replace: None,
+                                    replace_old: None,
+                                    path: path.into(),
                                     download: ContentDownload::Url {
                                         url: install_file.url.clone(),
-                                        filename: install_file.filename.clone(),
                                         sha1: install_file.hashes.sha1.clone(),
                                         size: install_file.size,
                                     },
-                                    content_type: this.content_type,
                                     content_source: ContentSource::Modrinth,
                                 }]
                                 .into(),

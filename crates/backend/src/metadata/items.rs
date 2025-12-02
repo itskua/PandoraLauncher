@@ -276,3 +276,37 @@ impl<'a> MetadataItem for ModrinthVersionUpdateMetadataItem {
         states.modrinth_version_updates.entry(self.sha1.clone()).or_default().clone()
     }
 }
+
+#[derive(Clone, Debug, Serialize)]
+pub struct VersionV3UpdateParameters {
+    pub loaders: Arc<[Arc<str>]>,
+    pub loader_fields: VersionV3LoaderFields,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct VersionV3LoaderFields {
+    pub mrpack_loaders: Arc<[ModrinthLoader]>,
+    pub game_versions: Arc<[Ustr]>,
+}
+
+pub struct ModrinthV3VersionUpdateMetadataItem {
+    pub sha1: Arc<str>,
+    pub params: VersionV3UpdateParameters,
+}
+
+impl<'a> MetadataItem for ModrinthV3VersionUpdateMetadataItem {
+    type T = ModrinthVersionFileUpdateResult;
+
+    fn request(&self, client: &reqwest::Client) -> RequestBuilder {
+        let url = format!("https://api.modrinth.com/v3/version_file/{}/update", self.sha1);
+        client.post(url).json(&self.params)
+    }
+
+    fn expires(&self) -> bool {
+        true
+    }
+
+    fn state(&self, states: &mut MetadataManagerStates) -> MetaLoadStateWrapper<Self::T> {
+        states.modrinth_version_updates.entry(self.sha1.clone()).or_default().clone()
+    }
+}

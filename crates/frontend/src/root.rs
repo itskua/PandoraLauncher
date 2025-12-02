@@ -8,7 +8,7 @@ use bridge::{
     modal_action::ModalAction,
 };
 use gpui::{prelude::*, *};
-use gpui_component::{breadcrumb::Breadcrumb, v_flex};
+use gpui_component::{breadcrumb::Breadcrumb, scroll::ScrollbarAxis, v_flex, StyledExt};
 
 use crate::{entity::DataEntities, modals, ui::{LauncherUI, PageType}};
 
@@ -21,6 +21,7 @@ impl Global for LauncherRootGlobal {}
 pub struct LauncherRoot {
     pub ui: Entity<LauncherUI>,
     pub panic_message: Arc<RwLock<Option<String>>>,
+    pub deadlock_message: Arc<RwLock<Option<String>>>,
     pub backend_handle: BackendHandle,
 }
 
@@ -28,6 +29,7 @@ impl LauncherRoot {
     pub fn new(
         data: &DataEntities,
         panic_message: Arc<RwLock<Option<String>>>,
+        deadlock_message: Arc<RwLock<Option<String>>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -36,6 +38,7 @@ impl LauncherRoot {
         Self {
             ui: launcher_ui,
             panic_message,
+            deadlock_message,
             backend_handle: data.backend_handle.clone(),
         }
     }
@@ -43,17 +46,27 @@ impl LauncherRoot {
 
 impl Render for LauncherRoot {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(message) = &*self.deadlock_message.read().unwrap() {
+            let purple = Hsla {
+                h: 0.8333333333,
+                s: 1.,
+                l: 0.25,
+                a: 1.,
+            };
+            return v_flex().size_full().bg(purple).child(message.clone()).scrollable(ScrollbarAxis::Vertical).into_any_element();
+        }
         if let Some(message) = &*self.panic_message.read().unwrap() {
-            return v_flex().size_full().bg(gpui::blue()).child(message.clone());
+            return v_flex().size_full().bg(gpui::blue()).child(message.clone()).scrollable(ScrollbarAxis::Vertical).into_any_element();
         }
         if self.backend_handle.is_closed() {
-            return v_flex().size_full().bg(gpui::red()).child("Backend has abruptly shutdown");
+            return v_flex().size_full().bg(gpui::red()).child("Backend has abruptly shutdown").into_any_element();
         }
 
         div()
             .size_full()
             .font_family("Inter 24pt")
             .child(self.ui.clone())
+            .into_any_element()
     }
 }
 

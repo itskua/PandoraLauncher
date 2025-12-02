@@ -74,12 +74,12 @@ pub enum ModrinthSideRequirement {
     Unknown,
 }
 
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ModrinthProjectType {
     Mod,
-    ModPack,
-    ResourcePack,
+    Modpack,
+    Resourcepack,
     Shader,
     #[serde(other)]
     Other,
@@ -89,8 +89,8 @@ impl ModrinthProjectType {
     pub fn as_str(&self) -> &'static str {
         match self {
             ModrinthProjectType::Mod => "mod",
-            ModrinthProjectType::ModPack => "modpack",
-            ModrinthProjectType::ResourcePack => "resourcepack",
+            ModrinthProjectType::Modpack => "modpack",
+            ModrinthProjectType::Resourcepack => "resourcepack",
             ModrinthProjectType::Shader => "shader",
             ModrinthProjectType::Other => "other",
         }

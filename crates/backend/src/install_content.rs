@@ -1,13 +1,13 @@
 use std::{ffi::OsString, io::Write, path::{Path, PathBuf}, sync::Arc};
 
 use bridge::{
-    install::{ContentDownload, ContentInstall, ContentInstallFile, ContentType},
+    install::{ContentDownload, ContentInstall, ContentInstallFile},
     message::MessageToFrontend,
-    modal_action::{ModalAction, ProgressTracker},
+    modal_action::{ModalAction, ProgressTracker, ProgressTrackerFinishType},
 };
 use schema::content::ContentSource;
 use sha1::{Digest, Sha1};
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncWriteExt, sync::{Mutex, RwLock}};
 
 use crate::BackendState;
 
@@ -24,37 +24,37 @@ pub enum ContentInstallError {
     #[error("Failed to perform I/O operation:\n{0}")]
     IoError(#[from] std::io::Error),
     #[error("Invalid filename:\n{0}")]
-    InvalidFilename(Arc<str>),
+    InvalidPath(Arc<Path>),
 }
 
 struct InstallFromContentLibrary {
     from: PathBuf,
     replace: Option<Arc<Path>>,
     hash: [u8; 20],
-    filename: OsString,
     content_file: ContentInstallFile,
 }
 
 impl BackendState {
-    pub async fn install_content(&mut self, content: ContentInstall, modal_action: ModalAction) {
+    pub async fn install_content(&self, content: ContentInstall, modal_action: ModalAction) {
         for content_file in content.files.iter() {
-            let ContentDownload::Url { filename, .. } = &content_file.download else {
-                continue;
-            };
-            if !crate::is_single_component_path(&filename) {
-                let error = ContentInstallError::InvalidFilename(filename.clone());
+            if !crate::is_relative_normal_path(&content_file.path) {
+                let error = ContentInstallError::InvalidPath(content_file.path.clone());
                 modal_action.set_error_message(Arc::from(format!("{}", error).as_str()));
                 modal_action.set_finished();
                 return;
             }
         }
 
+        let semaphore = tokio::sync::Semaphore::new(8);
+
         let mut tasks = Vec::new();
 
         for content_file in content.files.iter() {
             tasks.push(async {
                 match content_file.download {
-                    bridge::install::ContentDownload::Url { ref url, ref filename, ref sha1, size } => {
+                    bridge::install::ContentDownload::Url { ref url, ref sha1, size } => {
+                        let _permit = semaphore.acquire().await.unwrap();
+
                         let mut expected_hash = [0u8; 20];
                         let Ok(_) = hex::decode_to_slice(&**sha1, &mut expected_hash) else {
                             eprintln!("Content install has invalid sha1: {}", sha1);
@@ -66,9 +66,13 @@ impl BackendState {
 
                         let hash_folder = self.directories.content_library_dir.join(&hash_as_str[..2]);
                         let _ = tokio::fs::create_dir_all(&hash_folder).await;
-                        let path = hash_folder.join(hash_as_str);
+                        let mut path = hash_folder.join(hash_as_str);
 
-                        let title = format!("Downloading {}", filename);
+                        if let Some(extension) = content_file.path.extension() {
+                            path.set_extension(extension);
+                        }
+
+                        let title = format!("Downloading {}", content_file.path.file_name().unwrap().to_string_lossy());
                         let tracker = ProgressTracker::new(title.into(), self.send.clone());
                         modal_action.trackers.push(tracker.clone());
 
@@ -84,12 +88,12 @@ impl BackendState {
 
                         if valid_hash_on_disk {
                             tracker.set_count(size);
+                            tracker.set_finished(ProgressTrackerFinishType::Fast);
                             tracker.notify();
                             return Ok(InstallFromContentLibrary {
                                 from: path,
-                                replace: content_file.replace.clone(),
+                                replace: content_file.replace_old.clone(),
                                 hash: expected_hash,
-                                filename: OsString::from(&**filename),
                                 content_file: content_file.clone(),
                             });
                         }
@@ -115,6 +119,8 @@ impl BackendState {
                             file.write_all(&item).await?;
                         }
 
+                        tracker.set_finished(ProgressTrackerFinishType::Fast);
+
                         let actual_hash = hasher.finalize();
 
                         if *actual_hash != expected_hash {
@@ -127,23 +133,20 @@ impl BackendState {
 
                         Ok(InstallFromContentLibrary {
                             from: path,
-                            replace: content_file.replace.clone(),
+                            replace: content_file.replace_old.clone(),
                             hash: expected_hash,
-                            filename: OsString::from(&**filename),
                             content_file: content_file.clone(),
                         })
                     },
-                    bridge::install::ContentDownload::File { ref path } => {
-                        let filename = path.file_name().unwrap();
-
-                        let title = format!("Copying {}", filename.to_string_lossy());
+                    bridge::install::ContentDownload::File { path: ref copy_path } => {
+                        let title = format!("Copying {}", copy_path.file_name().unwrap().to_string_lossy());
                         let tracker = ProgressTracker::new(title.into(), self.send.clone());
                         modal_action.trackers.push(tracker.clone());
 
                         tracker.set_total(3);
                         tracker.notify();
 
-                        let data = tokio::fs::read(path).await?;
+                        let data = tokio::fs::read(copy_path).await?;
 
                         tracker.set_count(1);
                         tracker.notify();
@@ -156,7 +159,11 @@ impl BackendState {
 
                         let hash_folder = self.directories.content_library_dir.join(&hash_as_str[..2]);
                         let _ = tokio::fs::create_dir_all(&hash_folder).await;
-                        let path = hash_folder.join(hash_as_str);
+                        let mut path = hash_folder.join(hash_as_str);
+
+                        if let Some(extension) = content_file.path.extension() {
+                            path.set_extension(extension);
+                        }
 
                         let valid_hash_on_disk = {
                             let path = path.clone();
@@ -176,9 +183,8 @@ impl BackendState {
                         tracker.notify();
                         return Ok(InstallFromContentLibrary {
                             from: path,
-                            replace: content_file.replace.clone(),
+                            replace: content_file.replace_old.clone(),
                             hash: hash.into(),
-                            filename: filename.into(),
                             content_file: content_file.clone(),
                         });
                     },
@@ -193,7 +199,7 @@ impl BackendState {
 
                 match content.target {
                     bridge::install::InstallTarget::Instance(instance_id) => {
-                        if let Some(instance) = self.instances.get(instance_id.index) && instance.id == instance_id {
+                        if let Some(instance) = self.instance_state.read().instances.get(instance_id) {
                             instance_dir = Some(instance.dot_minecraft_path.clone());
                         }
                     },
@@ -214,19 +220,8 @@ impl BackendState {
                 if let Some(instance_dir) = instance_dir {
                     for install in files {
                         let mut target_path = instance_dir.to_path_buf();
-                        match install.content_file.content_type {
-                            ContentType::Mod | ContentType::Modpack => {
-                                target_path.push("mods");
-                            },
-                            ContentType::Resourcepack => {
-                                target_path.push("resourcepacks");
-                            },
-                            ContentType::Shader => {
-                                target_path.push("shaderpacks");
-                            },
-                        }
-                        let _ = std::fs::create_dir_all(&target_path);
-                        target_path.push(install.filename);
+                        target_path.push(install.content_file.path);
+                        let _ = std::fs::create_dir_all(target_path.parent().unwrap());
 
                         // Use std::fs instead of tokio::fs to ensure that remove and hard_link can't be interrupted
                         if let Some(replace) = install.replace {
@@ -240,8 +235,5 @@ impl BackendState {
                 modal_action.set_error_message(Arc::from(format!("{}", error).as_str()));
             },
         }
-
-        modal_action.set_finished();
-        self.send.send(MessageToFrontend::Refresh);
     }
 }

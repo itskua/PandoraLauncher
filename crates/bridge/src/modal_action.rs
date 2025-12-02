@@ -115,8 +115,26 @@ struct ProgressTrackerInner {
     count: AtomicUsize,
     total: AtomicUsize,
     finished_at: AtomicOptionInstant,
-    finished_with_error: AtomicBool,
+    finish_type: AtomicProgressTrackerFinishType,
     title: RwLock<Arc<str>>,
+}
+
+#[atomic_enum::atomic_enum]
+#[derive(PartialEq, Eq)]
+pub enum ProgressTrackerFinishType {
+    Normal,
+    Error,
+    Fast,
+}
+
+impl ProgressTrackerFinishType {
+    pub fn from_err(error: bool) -> Self {
+        if error {
+            Self::Error
+        } else {
+            Self::Normal
+        }
+    }
 }
 
 impl std::fmt::Debug for ProgressTrackerInner {
@@ -136,7 +154,7 @@ impl ProgressTracker {
                 count: AtomicUsize::new(0),
                 total: AtomicUsize::new(0),
                 finished_at: AtomicOptionInstant::none(),
-                finished_with_error: AtomicBool::new(false),
+                finish_type: AtomicProgressTrackerFinishType::new(ProgressTrackerFinishType::Normal),
                 title: RwLock::new(title),
             }),
             sender,
@@ -168,10 +186,8 @@ impl ProgressTracker {
         )
     }
 
-    pub fn set_finished(&self, error: bool) {
-        if error {
-            self.inner.finished_with_error.store(true, Ordering::SeqCst);
-        }
+    pub fn set_finished(&self, finish_type: ProgressTrackerFinishType) {
+        self.inner.finish_type.store(finish_type, Ordering::SeqCst);
         let _ = self.inner.finished_at.compare_exchange(None, Some(Instant::now()), Ordering::SeqCst, Ordering::Relaxed);
     }
 
@@ -179,8 +195,8 @@ impl ProgressTracker {
         self.inner.finished_at.load(Ordering::SeqCst)
     }
 
-    pub fn is_error(&self) -> bool {
-        self.inner.finished_with_error.load(Ordering::SeqCst)
+    pub fn finish_type(&self) -> ProgressTrackerFinishType {
+        self.inner.finish_type.load(Ordering::SeqCst)
     }
 
     pub fn add_count(&self, count: usize) {

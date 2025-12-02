@@ -1,8 +1,8 @@
-use std::{io::{BufRead, Read}, path::Path, sync::{atomic::Ordering, Arc}, time::{Duration, SystemTime}};
+use std::{ffi::OsString, io::{BufRead, Read, Seek, SeekFrom, Write}, path::Path, sync::{atomic::Ordering, Arc}, time::{Duration, SystemTime}};
 
 use auth::{credentials::AccountCredentials, secret::PlatformSecretStorage};
 use bridge::{
-    install::{ContentDownload, ContentInstall, ContentInstallFile, ContentType, InstallTarget}, instance::{ContentUpdateStatus, InstanceStatus, ModSummary}, message::{LogFiles, MessageToBackend, MessageToFrontend}, meta::MetadataResult, modal_action::{ModalActionVisitUrl, ProgressTracker}, serial::AtomicOptionSerial
+    install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::{ContentUpdateStatus, InstanceStatus, LoaderSpecificModSummary, ModSummary}, message::{LogFiles, MessageToBackend, MessageToFrontend}, meta::MetadataResult, modal_action::{ModalActionVisitUrl, ProgressTracker, ProgressTrackerFinishType}, serial::AtomicOptionSerial
 };
 use futures::{FutureExt, TryFutureExt};
 use schema::{content::ContentSource, modrinth::{ModrinthFile, ModrinthLoader}, version::{LaunchArgument, LaunchArgumentValue}};
@@ -10,11 +10,11 @@ use serde::Deserialize;
 use tokio::{io::AsyncBufReadExt, sync::Semaphore};
 
 use crate::{
-    account::{BackendAccount, MinecraftLoginInfo}, arcfactory::ArcStrFactory, instance::InstanceInfo, launch::{ArgumentExpansionKey, LaunchError}, log_reader, metadata::{items::{AssetsIndexMetadataItem, MinecraftVersionManifestMetadataItem, MinecraftVersionMetadataItem, ModrinthProjectVersionsMetadataItem, ModrinthSearchMetadataItem, ModrinthVersionUpdateMetadataItem, MojangJavaRuntimeComponentMetadataItem, MojangJavaRuntimesMetadataItem, VersionUpdateParameters}, manager::MetaLoadError}, mod_metadata::ModUpdateAction, BackendState, LoginError, WatchTarget
+    account::{BackendAccount, MinecraftLoginInfo}, arcfactory::ArcStrFactory, instance::InstanceInfo, launch::{ArgumentExpansionKey, LaunchError}, log_reader, metadata::{items::{AssetsIndexMetadataItem, MinecraftVersionManifestMetadataItem, MinecraftVersionMetadataItem, ModrinthProjectVersionsMetadataItem, ModrinthSearchMetadataItem, ModrinthV3VersionUpdateMetadataItem, ModrinthVersionUpdateMetadataItem, MojangJavaRuntimeComponentMetadataItem, MojangJavaRuntimesMetadataItem, VersionUpdateParameters, VersionV3LoaderFields, VersionV3UpdateParameters}, manager::MetaLoadError}, mod_metadata::ModUpdateAction, BackendState, LoginError, WatchTarget
 };
 
 impl BackendState {
-    pub async fn handle_message(&mut self, message: MessageToBackend) {
+    pub async fn handle_message(&self, message: MessageToBackend) {
         match message {
             MessageToBackend::RequestMetadata { request, force_reload } => {
                 let meta = self.meta.clone();
@@ -43,67 +43,13 @@ impl BackendState {
                 });
             },
             MessageToBackend::RequestLoadWorlds { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
-                    instance.start_load_worlds(self.self_handle.clone());
-
-                    if !instance.watching_dot_minecraft {
-                        instance.watching_dot_minecraft = true;
-                        if self.watcher.watch(&instance.dot_minecraft_path, notify::RecursiveMode::NonRecursive).is_ok() {
-                            self.watching.insert(instance.dot_minecraft_path.clone(), WatchTarget::InstanceDotMinecraftDir {
-                                id: instance.id,
-                            });
-                        }
-                    }
-                    if !instance.watching_saves_dir {
-                        instance.watching_saves_dir = true;
-                        let saves = instance.saves_path.clone();
-                        if self.watcher.watch(&saves, notify::RecursiveMode::NonRecursive).is_ok() {
-                            self.watching.insert(saves.clone(), WatchTarget::InstanceSavesDir { id: instance.id });
-                        }
-                    }
-                }
+                tokio::task::spawn(self.clone().load_instance_worlds(id));
             },
             MessageToBackend::RequestLoadServers { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
-                    instance.start_load_servers(self.self_handle.clone());
-
-                    if !instance.watching_dot_minecraft {
-                        instance.watching_dot_minecraft = true;
-                        if self.watcher.watch(&instance.dot_minecraft_path, notify::RecursiveMode::NonRecursive).is_ok() {
-                            self.watching.insert(instance.dot_minecraft_path.clone(), WatchTarget::InstanceDotMinecraftDir {
-                                id: instance.id,
-                            });
-                        }
-                    }
-                    if !instance.watching_server_dat {
-                        instance.watching_server_dat = true;
-                        let server_dat = instance.server_dat_path.clone();
-                        if self.watcher.watch(&server_dat, notify::RecursiveMode::NonRecursive).is_ok() {
-                            self.watching.insert(server_dat.clone(), WatchTarget::ServersDat { id: instance.id });
-                        }
-                    }
-                }
+                tokio::task::spawn(self.clone().load_instance_servers(id));
             },
             MessageToBackend::RequestLoadMods { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
-                    instance.start_load_mods(self.self_handle.clone(), &self.mod_metadata_manager);
-
-                    if !instance.watching_dot_minecraft {
-                        instance.watching_dot_minecraft = true;
-                        if self.watcher.watch(&instance.dot_minecraft_path, notify::RecursiveMode::NonRecursive).is_ok() {
-                            self.watching.insert(instance.dot_minecraft_path.clone(), WatchTarget::InstanceDotMinecraftDir {
-                                id: instance.id,
-                            });
-                        }
-                    }
-                    if !instance.watching_mods_dir {
-                        instance.watching_mods_dir = true;
-                        let mods_path = instance.mods_path.clone();
-                        if self.watcher.watch(&mods_path, notify::RecursiveMode::NonRecursive).is_ok() {
-                            self.watching.insert(mods_path.clone(), WatchTarget::InstanceModsDir { id: instance.id });
-                        }
-                    }
-                }
+                tokio::task::spawn(self.clone().load_instance_mods(id));
             },
             MessageToBackend::CreateInstance { name, version, loader } => {
                 if !crate::is_single_component_path(&name) {
@@ -114,7 +60,7 @@ impl BackendState {
                     self.send.send_warning(format!("Unable to create instance, name is invalid: {}", name));
                     return;
                 }
-                if self.instances.iter().any(|(_, i)| i.name == name) {
+                if self.instance_state.read().instances.iter().any(|i| i.name == name) {
                     self.send.send_warning("Unable to create instance, name is already used".to_string());
                     return;
                 }
@@ -123,7 +69,7 @@ impl BackendState {
 
                 let _ = tokio::fs::create_dir_all(&instance_dir).await;
 
-                self.watch_filesystem(&self.directories.instances_dir.clone(), WatchTarget::InstancesDir).await;
+                self.watch_filesystem(&self.directories.instances_dir.clone(), WatchTarget::InstancesDir);
 
                 let instance_info = InstanceInfo {
                     minecraft_version: version,
@@ -134,9 +80,7 @@ impl BackendState {
                 tokio::fs::write(info_path, serde_json::to_string_pretty(&instance_info).unwrap()).await.unwrap();
             },
             MessageToBackend::KillInstance { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
-                {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     if let Some(mut child) = instance.child.take() {
                         let result = child.kill();
                         if result.is_err() {
@@ -160,7 +104,9 @@ impl BackendState {
             } => {
                 let secret_storage = self.secret_storage.get_or_init(PlatformSecretStorage::new).await;
 
-                let mut credentials = if let Some(selected_account) = self.account_info.selected_account {
+                let selected_account = self.account_info.read().selected_account;
+
+                let mut credentials = if let Some(selected_account) = selected_account {
                     secret_storage.read_credentials(selected_account).await.ok().flatten().unwrap_or_default()
                 } else {
                     AccountCredentials::default()
@@ -180,24 +126,24 @@ impl BackendState {
 
                 let (profile, access_token) = match login_result {
                     Ok(login_result) => {
-                        login_tracker.set_finished(false);
+                        login_tracker.set_finished(ProgressTrackerFinishType::Normal);
                         login_tracker.notify();
                         login_result
                     },
                     Err(ref err) => {
-                        if let Some(selected_account) = self.account_info.selected_account {
+                        if let Some(selected_account) = selected_account {
                             let _ = secret_storage.delete_credentials(selected_account).await;
                         }
 
                         modal_action.set_error_message(format!("Error logging in: {}", &err).into());
-                        login_tracker.set_finished(true);
+                        login_tracker.set_finished(ProgressTrackerFinishType::Error);
                         login_tracker.notify();
                         modal_action.set_finished();
                         return;
                     },
                 };
 
-                if let Some(selected_account) = self.account_info.selected_account
+                if let Some(selected_account) = selected_account
                     && profile.id != selected_account
                 {
                     let _ = secret_storage.delete_credentials(selected_account).await;
@@ -205,31 +151,34 @@ impl BackendState {
 
                 let mut update_account_json = false;
 
-                if let Some(account) = self.account_info.accounts.get_mut(&profile.id) {
-                    if !account.downloaded_head {
+                {
+                    let mut account_info = self.account_info.write();
+                    if let Some(account) = account_info.accounts.get_mut(&profile.id) {
+                        if !account.downloaded_head {
+                            account.downloaded_head = true;
+                            self.update_profile_head(&profile);
+                        }
+                    } else {
+                        let mut account = BackendAccount::new_from_profile(&profile);
                         account.downloaded_head = true;
+                        account_info.accounts.insert(profile.id, account);
                         self.update_profile_head(&profile);
+                        update_account_json = true;
                     }
-                } else {
-                    let mut account = BackendAccount::new_from_profile(&profile);
-                    account.downloaded_head = true;
-                    self.account_info.accounts.insert(profile.id, account);
-                    self.update_profile_head(&profile);
-                    update_account_json = true;
-                }
 
-                if self.account_info.selected_account != Some(profile.id) {
-                    self.account_info.selected_account = Some(profile.id);
-                    update_account_json = true;
+                    if account_info.selected_account != Some(profile.id) {
+                        account_info.selected_account = Some(profile.id);
+                        update_account_json = true;
+                    }
+
+                    if update_account_json {
+                        self.send.send(account_info.create_update_message());
+                        self.write_account_info(&*account_info);
+                    }
                 }
 
                 if secret_storage.write_credentials(profile.id, &credentials).await.is_err() {
                     self.send.send_warning("Unable to write credentials to keychain. You might need to fully log in again next time");
-                }
-
-                if update_account_json {
-                    self.write_account_info().await;
-                    self.send.send(self.account_info.create_update_message());
                 }
 
                 let login_info = MinecraftLoginInfo {
@@ -238,16 +187,25 @@ impl BackendState {
                     access_token,
                 };
 
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                let add_mods = tokio::select! {
+                    add_mods = self.prelaunch_handle_mods(id, &modal_action) => add_mods,
+                    _ = modal_action.request_cancel.cancelled() => {
+                        self.send.send(MessageToFrontend::CloseModal);
+                        return;
+                    }
+                };
+
+                if modal_action.error.read().unwrap().is_some() {
+                    modal_action.set_finished();
+                    self.send.send(MessageToFrontend::Refresh);
+                    return;
+                }
+
+                let basic_info = if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     if instance.child.is_some() {
                         self.send.send_warning("Can't launch instance, already running");
                         modal_action.set_error_message("Can't launch instance, already running".into());
                         modal_action.set_finished();
-                        return;
-                    }
-
-                    if modal_action.has_requested_cancel() {
-                        self.send.send(MessageToFrontend::CloseModal);
                         return;
                     }
 
@@ -256,46 +214,56 @@ impl BackendState {
                     });
                     self.send.send(instance.create_modify_message_with_status(InstanceStatus::Launching));
 
-                    let launch_tracker = ProgressTracker::new(Arc::from("Launching"), self.send.clone());
-                    modal_action.trackers.push(launch_tracker.clone());
-
-                    let result = self.launcher.launch(&self.http_client, instance, quick_play, login_info, &launch_tracker, &modal_action).await;
-
-                    if matches!(result, Err(LaunchError::CancelledByUser)) {
-                        self.send.send(MessageToFrontend::CloseModal);
-                        self.send.send(instance.create_modify_message());
-                        return;
-                    }
-
-                    let is_err = result.is_err();
-                    match result {
-                        Ok(mut child) => {
-                            if let Some(stdout) = child.stdout.take() {
-                                log_reader::start_game_output(stdout, child.stderr.take(), self.send.clone());
-                            }
-                            instance.child = Some(child);
-                        },
-                        Err(ref err) => {
-                            modal_action.set_error_message(format!("{}", &err).into());
-                        },
-                    }
-
-                    launch_tracker.set_finished(is_err);
-                    launch_tracker.notify();
+                    instance.as_basic_info()
+                } else {
+                    self.send.send_error("Can't launch instance, unknown id");
+                    modal_action.set_error_message("Can't launch instance, unknown id".into());
                     modal_action.set_finished();
+                    return;
+                };
 
-                    self.send.send(instance.create_modify_message());
+                let launch_tracker = ProgressTracker::new(Arc::from("Launching"), self.send.clone());
+                modal_action.trackers.push(launch_tracker.clone());
 
+                let result = self.launcher.launch(&self.http_client, basic_info, quick_play, login_info, add_mods, &launch_tracker, &modal_action).await;
+
+                if matches!(result, Err(LaunchError::CancelledByUser)) {
+                    self.send.send(MessageToFrontend::CloseModal);
+                    if let Some(instance) = self.instance_state.read().instances.get(id) {
+                        self.send.send(instance.create_modify_message());
+                    }
                     return;
                 }
 
-                self.send.send_error("Can't launch instance, unknown id");
-                modal_action.set_error_message("Can't launch instance, unknown id".into());
+                let is_err = result.is_err();
+                match result {
+                    Ok(mut child) => {
+                        if let Some(stdout) = child.stdout.take() {
+                            log_reader::start_game_output(stdout, child.stderr.take(), self.send.clone());
+                        }
+                        if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
+                            instance.child = Some(child);
+                        }
+                    },
+                    Err(ref err) => {
+                        modal_action.set_error_message(format!("{}", &err).into());
+                    },
+                }
+
+                if let Some(instance) = self.instance_state.read().instances.get(id) {
+                    self.send.send(instance.create_modify_message());
+                }
+
+                launch_tracker.set_finished(if is_err { ProgressTrackerFinishType::Error } else { ProgressTrackerFinishType::Normal });
+                launch_tracker.notify();
                 modal_action.set_finished();
+
+                return;
+
             },
             MessageToBackend::SetModEnabled { id, mod_id, enabled } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
+                let mut instance_state = self.instance_state.write();
+                if let Some(instance) = instance_state.instances.get_mut(id)
                     && let Some(instance_mod) = instance.try_get_mod(mod_id)
                 {
                     if instance_mod.enabled == enabled {
@@ -309,8 +277,28 @@ impl BackendState {
                         new_path.set_extension("");
                     };
 
-                    self.reload_mods_immediately.insert(id);
                     let _ = std::fs::rename(&instance_mod.path, new_path);
+                    instance_state.reload_mods_immediately.insert(id);
+                }
+            },
+            MessageToBackend::SetModChildEnabled { id, mod_id, path, enabled } => {
+                let mut instance_state = self.instance_state.write();
+                if let Some(instance) = instance_state.instances.get_mut(id)
+                    && let Some(instance_mod) = instance.try_get_mod(mod_id)
+                {
+                    let Some(child_state_path) = crate::child_state_path(&instance_mod.path) else {
+                        return;
+                    };
+
+                    match set_mod_child_enabled(&child_state_path, &*path, enabled) {
+                        Ok(_) => {
+                            instance_state.reload_mods_immediately.insert(id);
+                        },
+                        Err(error) => {
+                            let error = format!("Error occured while updating child state: {error}");
+                            self.send.send_error(error);
+                        },
+                    }
                 }
             },
             MessageToBackend::UpdateAccountHeadPng {
@@ -318,13 +306,14 @@ impl BackendState {
                 head_png,
                 head_png_32x,
             } => {
-                if let Some(account) = self.account_info.accounts.get_mut(&uuid) {
+                let mut account_info = self.account_info.write();
+                if let Some(account) = account_info.accounts.get_mut(&uuid) {
                     let head_png = Some(head_png);
                     if account.head != head_png {
                         account.head = head_png;
                         account.head_32x = Some(head_png_32x);
-                        self.send.send(self.account_info.create_update_message());
-                        self.write_account_info().await;
+                        self.send.send(account_info.create_update_message());
+                        self.write_account_info(&*account_info);
                     }
                 }
             },
@@ -332,153 +321,165 @@ impl BackendState {
                 self.download_all_metadata().await;
             },
             MessageToBackend::InstallContent { content, modal_action } => {
-                self.install_content(content, modal_action).await;
+                self.install_content(content, modal_action.clone()).await;
+                modal_action.set_finished();
+                self.send.send(MessageToFrontend::Refresh);
             },
             MessageToBackend::DeleteMod { id, mod_id } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
-                    && let Some(instance_mod) = instance.try_get_mod(mod_id)
-                {
-                    self.reload_mods_immediately.insert(id);
-                    let _ = std::fs::remove_file(&instance_mod.path);
-                }
+                let mut instance_state = self.instance_state.write();
+                let Some(instance) = instance_state.instances.get_mut(id) else {
+                    self.send.send_error("Unable to find instance, unknown id");
+                    return;
+                };
+
+                let Some(instance_mod) = instance.try_get_mod(mod_id) else {
+                    self.send.send_error("Unable to delete mod, invalid id");
+                    return;
+                };
+
+                let _ = std::fs::remove_file(&instance_mod.path);
+                instance_state.reload_mods_immediately.insert(id);
             },
             MessageToBackend::UpdateCheck { instance: id, modal_action } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
-                    if let Some(serial) = instance.start_load_mods(self.self_handle.clone(), &self.mod_metadata_manager) {
-                        Self::instance_finished_loading_mods(instance, &self.send, id, serial).await;
-                    }
-                    let Some(mods) = &instance.mods else {
-                        modal_action.set_finished();
-                        return;
-                    };
-
-                    let modrinth_loader = instance.loader.as_modrinth_loader();
-                    if modrinth_loader == ModrinthLoader::Unknown {
-                        modal_action.set_error_message("Unable to update instance, unsupported loader".into());
-                        modal_action.set_finished();
-                        return;
-                    }
-
-                    let tracker = ProgressTracker::new("Checking mods".into(), self.send.clone());
-                    tracker.set_total(mods.len());
-                    modal_action.trackers.push(tracker.clone());
-
-                    let semaphore = Semaphore::new(8);
-
-                    let params = VersionUpdateParameters {
-                        loaders: [modrinth_loader].into(),
-                        game_versions: [instance.version].into(),
-                    };
-
-                    let meta = self.meta.clone();
-
-                    let mut futures = Vec::new();
-
-                    struct UpdateResult {
-                        mod_summary: Arc<ModSummary>,
-                        action: ModUpdateAction,
-                    }
-
-                    { // Scope is needed so await doesn't complain about the non-send RwLockReadGuard
-                        let sources = self.mod_metadata_manager.read_content_sources();
-                        for summary in mods.iter() {
-                            let source = sources.get(&summary.mod_summary.hash).copied().unwrap_or(ContentSource::Manual);
-                            let semaphore = &semaphore;
-                            let meta = &meta;
-                            let params = &params;
-                            let tracker = &tracker;
-                            futures.push(async move {
-                                match source {
-                                    ContentSource::Manual => {
-                                        tracker.add_count(1);
-                                        tracker.notify();
-                                        Ok(ModUpdateAction::ManualInstall)
-                                    },
-                                    ContentSource::Modrinth => {
-                                        let permit = semaphore.acquire().await.unwrap();
-                                        let result = meta.fetch(&ModrinthVersionUpdateMetadataItem {
-                                            sha1: hex::encode(summary.mod_summary.hash).into(),
-                                            params: params.clone()
-                                        }).await;
-                                        drop(permit);
-
-                                        tracker.add_count(1);
-                                        tracker.notify();
-
-                                        if let Err(MetaLoadError::NonOK(404)) = result {
-                                            return Ok(ModUpdateAction::ErrorNotFound);
-                                        }
-
-                                        let result = result?;
-
-                                        let install_file = result
-                                            .0
-                                            .files
-                                            .iter()
-                                            .find(|file| file.primary)
-                                            .unwrap_or(result.0.files.first().unwrap());
-
-                                        let mut latest_hash = [0u8; 20];
-                                        let Ok(_) = hex::decode_to_slice(&*install_file.hashes.sha1, &mut latest_hash) else {
-                                            return Ok(ModUpdateAction::ErrorInvalidHash);
-                                        };
-
-                                        if latest_hash == summary.mod_summary.hash {
-                                            Ok(ModUpdateAction::AlreadyUpToDate)
-                                        } else {
-                                            Ok(ModUpdateAction::Modrinth(install_file.clone()))
-                                        }
-                                    },
-                                }
-                            }.map_ok(|action| UpdateResult {
-                                mod_summary: summary.mod_summary.clone(),
-                                action,
-                            }));
-                        }
-                        drop(sources);
-                    }
-
-                    let results: Result<Vec<UpdateResult>, MetaLoadError> = futures::future::try_join_all(futures).await;
-
-                    match results {
-                        Ok(updates) => {
-                            let mut meta_updates = self.mod_metadata_manager.updates.write().unwrap();
-
-                            for update in updates {
-                                update.mod_summary.update_status.store(update.action.to_status(), Ordering::Relaxed);
-                                meta_updates.insert(update.mod_summary.hash, update.action);
-                            }
-                        },
-                        Err(error) => {
-                            tracker.set_finished(true);
-                            modal_action.set_error_message(format!("Error checking for updates: {}", error).into());
-                            modal_action.set_finished();
-                            return;
-                        },
-                    }
-
-                    tracker.set_finished(false);
+                let (loader, version) = if let Some(instance) = self.instance_state.read().instances.get(id) {
+                    (instance.loader, instance.version)
+                } else {
+                    self.send.send_error("Can't update instance, unknown id");
+                    modal_action.set_error_message("Can't update instance, unknown id".into());
                     modal_action.set_finished();
+                    return;
+                };
 
+                let Some(mods) = self.clone().load_instance_mods(id).await else {
+                    modal_action.set_finished();
+                    return;
+                };
+
+                let modrinth_loader = loader.as_modrinth_loader();
+                if modrinth_loader == ModrinthLoader::Unknown {
+                    modal_action.set_error_message("Unable to update instance, unsupported loader".into());
+                    modal_action.set_finished();
                     return;
                 }
 
-                self.send.send_error("Can't update instance, unknown id");
-                modal_action.set_error_message("Can't update instance, unknown id".into());
+                let tracker = ProgressTracker::new("Checking mods".into(), self.send.clone());
+                tracker.set_total(mods.len());
+                modal_action.trackers.push(tracker.clone());
+
+                let semaphore = Semaphore::new(8);
+
+                let params = VersionUpdateParameters {
+                    loaders: [modrinth_loader].into(),
+                    game_versions: [version].into(),
+                };
+
+                let modrinth_modpack_params = VersionV3UpdateParameters {
+                    loaders: ["mrpack".into()].into(),
+                    loader_fields: VersionV3LoaderFields {
+                        mrpack_loaders: [modrinth_loader].into(),
+                        game_versions: [version].into(),
+                    },
+                };
+
+                let meta = self.meta.clone();
+
+                let mut futures = Vec::new();
+
+                struct UpdateResult {
+                    mod_summary: Arc<ModSummary>,
+                    action: ModUpdateAction,
+                }
+
+                { // Scope is needed so await doesn't complain about the non-send RwLockReadGuard
+                    let sources = self.mod_metadata_manager.read_content_sources();
+                    for summary in mods.iter() {
+                        let source = sources.get(&summary.mod_summary.hash).copied().unwrap_or(ContentSource::Manual);
+                        let semaphore = &semaphore;
+                        let meta = &meta;
+                        let params = &params;
+                        let modpack_params = &modrinth_modpack_params;
+                        let tracker = &tracker;
+                        futures.push(async move {
+                            match source {
+                                ContentSource::Manual => {
+                                    tracker.add_count(1);
+                                    tracker.notify();
+                                    Ok(ModUpdateAction::ManualInstall)
+                                },
+                                ContentSource::Modrinth => {
+                                    let permit = semaphore.acquire().await.unwrap();
+                                    let result = if matches!(summary.mod_summary.extra, LoaderSpecificModSummary::ModrinthModpack { .. }) {
+                                        meta.fetch(&ModrinthV3VersionUpdateMetadataItem {
+                                            sha1: hex::encode(summary.mod_summary.hash).into(),
+                                            params: modpack_params.clone()
+                                        }).await
+                                    } else {
+                                        meta.fetch(&ModrinthVersionUpdateMetadataItem {
+                                            sha1: hex::encode(summary.mod_summary.hash).into(),
+                                            params: params.clone()
+                                        }).await
+                                    };
+                                    drop(permit);
+
+                                    tracker.add_count(1);
+                                    tracker.notify();
+
+                                    if let Err(MetaLoadError::NonOK(404)) = result {
+                                        return Ok(ModUpdateAction::ErrorNotFound);
+                                    }
+
+                                    let result = result?;
+
+                                    let install_file = result
+                                        .0
+                                        .files
+                                        .iter()
+                                        .find(|file| file.primary)
+                                        .unwrap_or(result.0.files.first().unwrap());
+
+                                    let mut latest_hash = [0u8; 20];
+                                    let Ok(_) = hex::decode_to_slice(&*install_file.hashes.sha1, &mut latest_hash) else {
+                                        return Ok(ModUpdateAction::ErrorInvalidHash);
+                                    };
+
+                                    if latest_hash == summary.mod_summary.hash {
+                                        Ok(ModUpdateAction::AlreadyUpToDate)
+                                    } else {
+                                        Ok(ModUpdateAction::Modrinth(install_file.clone()))
+                                    }
+                                },
+                            }
+                        }.map_ok(|action| UpdateResult {
+                            mod_summary: summary.mod_summary.clone(),
+                            action,
+                        }));
+                    }
+                }
+
+                let results: Result<Vec<UpdateResult>, MetaLoadError> = futures::future::try_join_all(futures).await;
+
+                match results {
+                    Ok(updates) => {
+                        let mut meta_updates = self.mod_metadata_manager.updates.write().unwrap();
+
+                        for update in updates {
+                            update.mod_summary.update_status.store(update.action.to_status(), Ordering::Relaxed);
+                            meta_updates.insert(update.mod_summary.hash, update.action);
+                        }
+                    },
+                    Err(error) => {
+                        tracker.set_finished(ProgressTrackerFinishType::Error);
+                        modal_action.set_error_message(format!("Error checking for updates: {}", error).into());
+                        modal_action.set_finished();
+                        return;
+                    },
+                }
+
+                tracker.set_finished(ProgressTrackerFinishType::Normal);
                 modal_action.set_finished();
             },
-            MessageToBackend::FinishedLoadingWorlds { instance, serial } => {
-                self.finished_loading_worlds(instance, serial).await;
-            },
-            MessageToBackend::FinishedLoadingServers { instance, serial } => {
-                self.finished_loading_servers(instance, serial).await;
-            },
-            MessageToBackend::FinishedLoadingMods { instance, serial } => {
-                self.finished_loading_mods(instance, serial).await;
-            },
             MessageToBackend::UpdateMod { instance: id, mod_id, modal_action } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                let content_install = if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     let Some(mod_summary) = instance.try_get_mod(mod_id) else {
                         self.send.send_error("Can't update mod in instance, unknown mod id");
                         modal_action.set_finished();
@@ -495,47 +496,60 @@ impl BackendState {
                         ModUpdateAction::ErrorNotFound => {
                             self.send.send_error("Can't update mod in instance, 404 not found");
                             modal_action.set_finished();
+                            return;
                         },
                         ModUpdateAction::ErrorInvalidHash => {
                             self.send.send_error("Can't update mod in instance, returned invalid hash");
                             modal_action.set_finished();
+                            return;
                         },
                         ModUpdateAction::AlreadyUpToDate => {
                             self.send.send_error("Can't update mod in instance, already up-to-date");
                             modal_action.set_finished();
+                            return;
                         },
                         ModUpdateAction::ManualInstall => {
                             self.send.send_error("Can't update mod in instance, mod was manually installed");
                             modal_action.set_finished();
+                            return;
                         },
                         ModUpdateAction::Modrinth(modrinth_file) => {
-                            let content = ContentInstall {
+                            let mut path = mod_summary.path.with_file_name(&*modrinth_file.filename);
+                            if !mod_summary.enabled {
+                                path.add_extension("disabled");
+                            }
+                            let path = match path.strip_prefix(&instance.dot_minecraft_path) {
+                                Ok(path) => path,
+                                Err(_) => {
+                                    self.send.send_error("Can't update mod in instance, invalid filename");
+                                    modal_action.set_finished();
+                                    return;
+                                },
+                            };
+                            ContentInstall {
                                 target: InstallTarget::Instance(id),
                                 files: [ContentInstallFile {
-                                    replace: Some(mod_summary.path.clone()),
+                                    replace_old: Some(mod_summary.path.clone()),
+                                    path: path.into(),
                                     download: ContentDownload::Url {
                                         url: modrinth_file.url.clone(),
-                                        filename: if mod_summary.enabled {
-                                            modrinth_file.filename
-                                        } else {
-                                            format!("{}.disabled", modrinth_file.filename).into()
-                                        },
                                         sha1: modrinth_file.hashes.sha1.clone(),
                                         size: modrinth_file.size,
                                     },
-                                    content_type: ContentType::Mod,
                                     content_source: ContentSource::Modrinth,
                                 }].into(),
-                            };
-                            self.install_content(content, modal_action).await;
+                            }
                         },
                     }
-
+                } else {
+                    self.send.send_error("Can't update mod in instance, unknown instance id");
+                    modal_action.set_finished();
                     return;
-                }
+                };
 
-                self.send.send_error("Can't update mod in instance, unknown instance id");
+                self.install_content(content_install, modal_action.clone()).await;
                 modal_action.set_finished();
+                self.send.send(MessageToFrontend::Refresh);
             },
             MessageToBackend::Sleep5s => {
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -663,7 +677,7 @@ impl BackendState {
                 });
             },
             MessageToBackend::GetLogFiles { instance: id, channel } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     let logs = instance.dot_minecraft_path.join("logs");
 
                     if let Ok(read_dir) = std::fs::read_dir(logs) {
@@ -704,7 +718,7 @@ impl BackendState {
             MessageToBackend::CleanupOldLogFiles { instance: id } => {
                 let mut deleted = 0;
 
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     let logs = instance.dot_minecraft_path.join("logs");
 
                     if let Ok(read_dir) = std::fs::read_dir(logs) {
@@ -747,7 +761,7 @@ impl BackendState {
 
                 let mut reader = std::io::BufReader::new(file);
                 let Ok(buffer) = reader.fill_buf() else {
-                    tracker.set_finished(true);
+                    tracker.set_finished(ProgressTrackerFinishType::Error);
                     tracker.notify();
                     return;
                 };
@@ -774,6 +788,16 @@ impl BackendState {
                 tracker.set_title("Redacting sensitive information".into());
                 tracker.set_count(1);
                 tracker.notify();
+
+                // Truncate to 11mb, mclo.gs limit as of right now is ~10.5mb
+                if content.len() > 11000000 {
+                    for i in 0..4 {
+                        if content.is_char_boundary(11000000 - i) {
+                            content.truncate(11000000 - i);
+                            break;
+                        }
+                    }
+                }
 
                 let replaced = log_reader::replace(&*content);
 
@@ -853,7 +877,7 @@ impl BackendState {
                 }
 
                 tracker.set_count(4);
-                tracker.set_finished(false);
+                tracker.set_finished(ProgressTrackerFinishType::Normal);
                 tracker.notify();
             },
         }
@@ -952,6 +976,40 @@ impl BackendState {
 
         println!("Done downloading all metadata");
     }
+}
+
+fn set_mod_child_enabled(child_state_path: &Path, child: &str, enabled: bool) -> std::io::Result<()> {
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .open(child_state_path)?;
+
+    let _ = file.lock();
+
+    let mut string = String::new();
+    file.read_to_string(&mut string)?;
+
+    if !string.ends_with('\n') {
+        string.push('\n');
+    }
+
+    let line = format!("{}\n", child);
+    let was_enabled = string.find(&line);
+
+    if was_enabled.is_none() != enabled {
+        if !enabled {
+            string.push_str(&line);
+        } else {
+            let from = was_enabled.unwrap();
+            string.replace_range(from..from+line.len() , "");
+        }
+        file.set_len(0)?;
+        file.seek(SeekFrom::Start(0))?;
+        file.write_all(string.as_bytes())?;
+    }
+
+    Ok(())
 }
 
 fn check_argument_expansions(argument: &str) {

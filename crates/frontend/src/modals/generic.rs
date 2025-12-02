@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bridge::modal_action::ModalAction;
+use bridge::modal_action::{ModalAction, ProgressTrackerFinishType};
 use gpui::{prelude::*, *};
 use gpui_component::{
     button::{Button, ButtonVariants}, dialog::DialogButtonProps, notification::Notification, v_flex, WindowExt
@@ -40,6 +40,12 @@ pub fn show_notification(
                 }
 
                 if let Some(finished_at) = tracker.get_finished_at() {
+                    let finish_type = tracker.finish_type();
+
+                    if finish_type == ProgressTrackerFinishType::Fast {
+                        continue;
+                    }
+
                     let elapsed = finished_at.elapsed().as_secs_f32();
                     if elapsed >= 2.0 {
                         continue;
@@ -47,7 +53,7 @@ pub fn show_notification(
                         opacity = 2.0 - elapsed;
                     }
 
-                    if tracker.is_error() {
+                    if finish_type == ProgressTrackerFinishType::Error {
                         progress_bar.color = ProgressBarColor::Error;
                     } else {
                         progress_bar.color = ProgressBarColor::Success;
@@ -129,6 +135,12 @@ pub fn show_modal(
             }
 
             if let Some(finished_at) = tracker.get_finished_at() {
+                let finish_type = tracker.finish_type();
+
+                if finish_type == ProgressTrackerFinishType::Fast {
+                    continue;
+                }
+
                 let elapsed = finished_at.elapsed().as_secs_f32();
                 if elapsed >= 2.0 {
                     continue;
@@ -136,7 +148,7 @@ pub fn show_modal(
                     opacity = 2.0 - elapsed;
                 }
 
-                if tracker.is_error() {
+                if finish_type == ProgressTrackerFinishType::Error {
                     progress_bar.color = ProgressBarColor::Error;
                 } else {
                     progress_bar.color = ProgressBarColor::Success;

@@ -90,7 +90,7 @@ impl InstanceLogsSubpage {
                         page.last_selected_path = selected.clone();
 
                         if let Some(selected) = selected {
-                            let (send, mut recv) = tokio::sync::mpsc::channel::<Arc<str>>(64);
+                            let (send, mut recv) = tokio::sync::mpsc::channel::<Arc<str>>(256);
 
                             let text_field = cx.new(move |_| ReadonlyTextField::default());
 

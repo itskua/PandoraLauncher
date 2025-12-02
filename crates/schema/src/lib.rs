@@ -5,6 +5,7 @@ pub mod fabric_loader_manifest;
 pub mod java_runtime_component;
 pub mod java_runtimes;
 pub mod loader;
+pub mod modification;
 pub mod modrinth;
 pub mod version;
 pub mod version_manifest;

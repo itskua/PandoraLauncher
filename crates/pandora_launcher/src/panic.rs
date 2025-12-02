@@ -1,6 +1,8 @@
 use std::sync::{Arc, RwLock};
 
-pub fn install_hook(panic_message: Arc<RwLock<Option<String>>>) {
+use bridge::handle::FrontendHandle;
+
+pub fn install_hook(panic_message: Arc<RwLock<Option<String>>>, frontend_handle: FrontendHandle) {
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let thread = std::thread::current();
@@ -31,6 +33,7 @@ pub fn install_hook(panic_message: Arc<RwLock<Option<String>>>) {
 
             eprintln!("{}", message);
             *panic_message.write().unwrap() = Some(message);
+            frontend_handle.send(bridge::message::MessageToFrontend::Refresh);
         } else {
             (old_hook)(info);
         }

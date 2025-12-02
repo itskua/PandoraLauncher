@@ -1,7 +1,7 @@
 #![deny(unused_must_use)]
 
 mod backend;
-use std::{io::Write, path::Path};
+use std::{ffi::OsString, io::Write, path::{Path, PathBuf}};
 
 pub use backend::*;
 use sha1::{Digest, Sha1};
@@ -19,6 +19,7 @@ mod launch_wrapper;
 mod log_reader;
 mod metadata;
 mod mod_metadata;
+mod id_slab;
 
 pub(crate) fn is_single_component_path(path: &str) -> bool {
     let path = std::path::Path::new(path);
@@ -29,6 +30,22 @@ pub(crate) fn is_single_component_path(path: &str) -> bool {
     }
 
     components.count() == 1
+}
+
+pub(crate) fn is_relative_normal_path(path: &Path) -> bool {
+    if path.is_absolute() {
+        return false;
+    }
+
+    if path.components().count() == 0 {
+        return false;
+    }
+
+    if !path.components().all(|component| matches!(component, std::path::Component::Normal(_))) {
+        return false;
+    }
+
+    true
 }
 
 pub(crate) fn check_sha1_hash(path: &Path, expected_hash: [u8; 20]) -> std::io::Result<bool> {
@@ -63,4 +80,39 @@ pub(crate) fn write_safe(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> s
     std::fs::rename(temp, path)?;
 
     Ok(())
+}
+
+pub(crate) fn child_state_path(path: &Path) -> Option<PathBuf> {
+    let mut new_path = path.to_path_buf();
+
+    if let Some(extension) = new_path.extension() {
+        if extension == "disabled" {
+            new_path.set_extension("");
+        }
+    }
+
+    let Some(filename) = new_path.file_name() else {
+        return None;
+    };
+
+    let mut new_filename = OsString::new();
+    new_filename.push(".");
+    new_filename.push(filename);
+    new_filename.push(".pandorachildstate");
+    new_path.set_file_name(new_filename);
+
+    Some(new_path)
+}
+
+pub(crate) fn create_content_library_path(content_library_dir: &Path, expected_hash: [u8; 20], extension: Option<&std::ffi::OsStr>) -> PathBuf {
+    let hash_as_str = hex::encode(expected_hash);
+
+    let hash_folder = content_library_dir.join(&hash_as_str[..2]);
+    let mut path = hash_folder.join(hash_as_str);
+
+    if let Some(extension) = extension {
+        path.set_extension(extension);
+    }
+
+    path
 }

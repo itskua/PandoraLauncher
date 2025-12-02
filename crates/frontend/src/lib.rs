@@ -68,6 +68,7 @@ impl AssetSource for Assets {
 
 pub fn start(
     panic_message: Arc<RwLock<Option<String>>>,
+    deadlock_message: Arc<RwLock<Option<String>>>,
     backend_handle: BackendHandle,
     mut recv: FrontendReceiver,
 ) {
@@ -252,7 +253,7 @@ pub fn start(
 
                 window.set_window_title("Pandora");
 
-                let launcher_root = cx.new(|cx| LauncherRoot::new(&data, panic_message, window, cx));
+                let launcher_root = cx.new(|cx| LauncherRoot::new(&data, panic_message, deadlock_message, window, cx));
                 cx.set_global(LauncherRootGlobal {
                     root: launcher_root.clone(),
                 });

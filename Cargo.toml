@@ -89,3 +89,5 @@ intrusive-collections = "0.9.7"
 tokio-util = "0.7.17"
 enumset = "1.1.10"
 serde_with = "3.15.1"
+typed-path = "0.12.0"
+parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }

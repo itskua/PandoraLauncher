@@ -2,15 +2,18 @@ use std::{
     collections::HashMap, fs::File, io::{Cursor, Read}, path::{Path, PathBuf}, sync::{Arc, RwLockReadGuard}
 };
 
-use bridge::instance::{AtomicContentUpdateStatus, ContentUpdateStatus, ModSummary};
+use bridge::instance::{AtomicContentUpdateStatus, ContentUpdateStatus, LoaderSpecificModSummary, ModSummary};
+use futures::{FutureExt, TryFutureExt};
 use image::imageops::FilterType;
+use indexmap::IndexMap;
 use rustc_hash::FxHashMap;
-use schema::{content::ContentSource, modrinth::ModrinthFile};
+use schema::{content::ContentSource, modification::ModrinthModpackFileDownload, modrinth::ModrinthFile};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use sha1::{Digest, Sha1};
+use tokio::task::spawn_blocking;
 use std::sync::RwLock;
-use zip::read::ZipFile;
+use zip::{read::ZipFile, ZipArchive};
 
 #[derive(Clone)]
 pub enum ModUpdateAction {
@@ -34,7 +37,7 @@ impl ModUpdateAction {
 }
 
 pub struct ModMetadataManager {
-    _content_meta_dir: Arc<Path>,
+    content_library_dir: Arc<Path>,
     sources_json: PathBuf,
     by_hash: RwLock<FxHashMap<[u8; 20], Option<Arc<ModSummary>>>>,
     content_sources: RwLock<FxHashMap<[u8; 20], ContentSource>>,
@@ -42,7 +45,7 @@ pub struct ModMetadataManager {
 }
 
 impl ModMetadataManager {
-    pub fn load(content_meta_dir: Arc<Path>) -> Self {
+    pub fn load(content_meta_dir: Arc<Path>, content_library_dir: Arc<Path>) -> Self {
         let sources_json = content_meta_dir.join("sources.json");
 
         let content_sources = if let Ok(data) = std::fs::read(&sources_json) {
@@ -53,7 +56,7 @@ impl ModMetadataManager {
         };
 
         Self {
-            _content_meta_dir: content_meta_dir,
+            content_library_dir,
             sources_json,
             by_hash: Default::default(),
             content_sources: RwLock::new(content_sources),
@@ -84,7 +87,7 @@ impl ModMetadataManager {
         }
     }
 
-    pub fn get(&self, file: &mut std::fs::File) -> Option<Arc<ModSummary>> {
+    pub fn get(self: &Arc<Self>, file: &mut std::fs::File) -> Option<Arc<ModSummary>> {
         let mut hasher = Sha1::new();
         let _ = std::io::copy(file, &mut hasher).ok()?;
         let actual_hash: [u8; 20] = hasher.finalize().into();
@@ -95,23 +98,44 @@ impl ModMetadataManager {
             return summary.clone();
         }
 
-        let summary = Self::load_mod_summary(actual_hash, file);
+        let summary = self.load_mod_summary(actual_hash, file, true);
 
         self.by_hash.write().unwrap().insert(actual_hash, summary.clone());
 
         summary
     }
 
-    fn load_mod_summary(hash: [u8; 20], file: &mut std::fs::File) -> Option<Arc<ModSummary>> {
-        let mut archive = zip::ZipArchive::new(file).ok()?;
-        let file = match archive.by_name("fabric.mod.json") {
+    fn load_mod_summary(self: &Arc<Self>, hash: [u8; 20], file: &mut std::fs::File, allow_children: bool) -> Option<Arc<ModSummary>> {
+        let archive = zip::ZipArchive::new(file).ok()?;
+
+        if archive.index_for_name("fabric.mod.json").is_some() {
+            Self::load_fabric_mod(hash, archive)
+        } else if allow_children && archive.index_for_name("modrinth.index.json").is_some() {
+            self.load_modrinth_modpack(hash, archive)
+        } else {
+            None
+        }
+    }
+
+    fn load_fabric_mod(hash: [u8; 20], mut archive: ZipArchive<&mut File>) -> Option<Arc<ModSummary>> {
+        let mut file = match archive.by_name("fabric.mod.json") {
             Ok(file) => file,
             Err(..) => {
                 return None;
             },
         };
 
-        let fabric_mod_json: FabricModJson = serde_json::from_reader(file).unwrap();
+        let mut file_content = String::with_capacity(file.size() as usize);
+        file.read_to_string(&mut file_content).ok()?;
+
+        // Some mods violate the JSON spec by using raw newline characters (e.g. BetterGrassify)
+        file_content = file_content.replace("\n", " ");
+
+        let fabric_mod_json: FabricModJson = serde_json::from_str(&file_content).inspect_err(|e| {
+            eprintln!("Error parsing fabric.mod.json: {e}");
+        }).ok()?;
+
+        drop(file);
 
         let name = fabric_mod_json.name.unwrap_or_else(|| Arc::clone(&fabric_mod_json.id));
 
@@ -147,14 +171,117 @@ impl ModMetadataManager {
             "".into()
         };
 
+        let mut lowercase_search_key = fabric_mod_json.id.to_lowercase();
+        lowercase_search_key.push_str("$$");
+        lowercase_search_key.push_str(&name.to_lowercase());
+
         Some(Arc::new(ModSummary {
             id: fabric_mod_json.id,
             hash,
             name,
+            lowercase_search_key: lowercase_search_key.into(),
             authors,
             version_str: format!("v{}", fabric_mod_json.version).into(),
             png_icon,
             update_status: Arc::new(AtomicContentUpdateStatus::new(ContentUpdateStatus::Unknown)),
+            extra: LoaderSpecificModSummary::Fabric
+        }))
+    }
+
+    fn load_modrinth_modpack(self: &Arc<Self>, hash: [u8; 20], mut archive: ZipArchive<&mut File>) -> Option<Arc<ModSummary>> {
+        let file = match archive.by_name("modrinth.index.json") {
+            Ok(file) => file,
+            Err(..) => {
+                return None;
+            },
+        };
+
+        let modrinth_index_json: ModrinthIndexJson = serde_json::from_reader(file).unwrap();
+
+        let mut overrides: IndexMap<Arc<Path>, Arc<[u8]>> = IndexMap::new();
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i).unwrap();
+            let Some(enclosed) = file.enclosed_name() else {
+                continue;
+            };
+            if !file.is_file() {
+                continue;
+            }
+
+            let (prioritize, path) = if let Ok(path) = enclosed.strip_prefix("overrides") {
+                (false, path)
+            } else if let Ok(path) = enclosed.strip_prefix("client-overrides") {
+                (true, path)
+            } else {
+                continue;
+            };
+
+            let path = path.into();
+
+            if !prioritize && overrides.contains_key(&path) {
+                continue;
+            }
+
+            let mut data = Vec::with_capacity(file.size() as usize);
+            if file.read_to_end(&mut data).is_err() {
+                continue;
+            }
+            overrides.insert(path, data.into());
+        }
+
+        let lowercase_search_key = modrinth_index_json.name.to_lowercase();
+
+        let summaries_fut = modrinth_index_json.files.iter().cloned().map(|download| {
+            async {
+                let this = self.clone();
+                tokio::task::spawn_blocking(move || {
+                    let mut file_hash = [0u8; 20];
+                    let Ok(_) = hex::decode_to_slice(&*download.hashes.sha1, &mut file_hash) else {
+                        return None;
+                    };
+
+                    let by_hash = this.by_hash.read().unwrap();
+                    if let Some(cached) = by_hash.get(&file_hash).cloned() {
+                        return cached;
+                    }
+                    drop(by_hash);
+
+                    let file_hash_as_str = hex::encode(file_hash);
+
+                    let mut file = this.content_library_dir.join(&file_hash_as_str[..2]);
+                    file.push(&file_hash_as_str);
+                    if let Some(extension) = typed_path::Utf8UnixPath::new(&*download.path).extension() {
+                        file.set_extension(extension);
+                    }
+
+                    if let Ok(mut file) = std::fs::File::open(file) {
+                        let summary = this.load_mod_summary(file_hash, &mut file, false);
+                        let mut by_hash = this.by_hash.write().unwrap();
+                        by_hash.insert(file_hash, summary.clone());
+                        return summary;
+                    }
+
+                    None
+                }).await.ok().flatten()
+            }
+        });
+        let summaries = futures::executor::block_on(futures::future::join_all(summaries_fut));
+
+        Some(Arc::new(ModSummary {
+            id: "".into(),
+            hash,
+            name: modrinth_index_json.name,
+            lowercase_search_key: lowercase_search_key.into(),
+            authors: "".into(),
+            version_str: format!("v{}", modrinth_index_json.version_id).into(),
+            png_icon: None,
+            update_status: Arc::new(AtomicContentUpdateStatus::new(ContentUpdateStatus::Unknown)),
+            extra: LoaderSpecificModSummary::ModrinthModpack {
+                downloads: modrinth_index_json.files,
+                summaries: summaries.into(),
+                overrides: overrides.into_iter().collect(),
+            }
         }))
     }
 }
@@ -231,6 +358,14 @@ impl Person {
             Person::NameAndContact { name, .. } => name,
         }
     }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ModrinthIndexJson {
+    version_id: Arc<str>,
+    name: Arc<str>,
+    files: Arc<[ModrinthModpackFileDownload]>,
 }
 
 #[serde_as]

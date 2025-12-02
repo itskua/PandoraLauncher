@@ -11,14 +11,6 @@ pub enum InstallTarget {
     NewInstance,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContentType {
-    Mod,
-    Modpack,
-    Resourcepack,
-    Shader,
-}
-
 #[derive(Debug, Clone)]
 pub struct ContentInstall {
     pub target: InstallTarget,
@@ -27,9 +19,9 @@ pub struct ContentInstall {
 
 #[derive(Debug, Clone)]
 pub struct ContentInstallFile {
-    pub replace: Option<Arc<Path>>,
+    pub replace_old: Option<Arc<Path>>,
+    pub path: Arc<Path>,
     pub download: ContentDownload,
-    pub content_type: ContentType,
     pub content_source: ContentSource,
 }
 
@@ -37,7 +29,6 @@ pub struct ContentInstallFile {
 pub enum ContentDownload {
     Url {
         url: Arc<str>,
-        filename: Arc<str>,
         sha1: Arc<str>,
         size: usize,
     },

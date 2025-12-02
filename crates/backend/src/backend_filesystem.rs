@@ -57,11 +57,7 @@ impl BackendState {
                     self.handle_filesystem_event(last_event, &mut after_debounce_effects).await;
                 }
                 for id in after_debounce_effects.reload_mods {
-                    if let Some(instance) = self.instances.get_mut(id.index)
-                        && instance.id == id
-                    {
-                        instance.start_load_mods(self.self_handle.clone(), &self.mod_metadata_manager);
-                    }
+                    tokio::task::spawn(self.clone().load_instance_mods(id));
                 }
             },
             Err(_) => {
@@ -76,15 +72,15 @@ impl BackendState {
         path: Arc<Path>,
         after_debounce_effects: &mut AfterDebounceEffects,
     ) {
-        if let Some(target) = self.watching.get(&path).copied()
-            && self.filesystem_handle_change(target, &path, after_debounce_effects).await
-        {
+        let target = self.file_watching.read().watching.get(&path).copied();
+        if let Some(target) = target && self.filesystem_handle_change(target, &path, after_debounce_effects).await {
             return;
         }
         let Some(parent_path) = path.parent() else {
             return;
         };
-        if let Some(parent) = self.watching.get(parent_path).copied() {
+        let parent = self.file_watching.read().watching.get(parent_path).copied();
+        if let Some(parent) = parent {
             self.filesystem_handle_child_change(parent, parent_path, &path, after_debounce_effects).await;
         }
     }
@@ -94,7 +90,8 @@ impl BackendState {
         path: Arc<Path>,
         after_debounce_effects: &mut AfterDebounceEffects,
     ) {
-        if let Some(target) = self.watching.remove(&path)
+        let target = self.file_watching.write().watching.remove(&path);
+        if let Some(target) = target
             && self.filesystem_handle_removed(target, &path, after_debounce_effects).await
         {
             return;
@@ -102,7 +99,8 @@ impl BackendState {
         let Some(parent_path) = path.parent() else {
             return;
         };
-        if let Some(parent) = self.watching.get(parent_path).copied() {
+        let parent = self.file_watching.write().watching.get(parent_path).copied();
+        if let Some(parent) = parent {
             self.filesystem_handle_child_removed(parent, parent_path, &path, after_debounce_effects).await;
         }
     }
@@ -113,18 +111,21 @@ impl BackendState {
         to: Arc<Path>,
         after_debounce_effects: &mut AfterDebounceEffects,
     ) {
-        if let Some(target) = self.watching.remove(&from)
+        let target = self.file_watching.write().watching.remove(&from);
+        if let Some(target) = target
             && self.filesystem_handle_renamed(target, &from, &to, after_debounce_effects).await
         {
             return;
         }
-        if let Some(parent_path) = from.parent()
-            && let Some(parent) = self.watching.get(parent_path).copied()
-            && self
-                .filesystem_handle_child_renamed(parent, parent_path, &from, &to, after_debounce_effects)
-                .await
-        {
-            return;
+        if let Some(parent_path) = from.parent() {
+            let parent = self.file_watching.read().watching.get(parent_path).copied();
+            if let Some(parent) = parent
+                && self
+                    .filesystem_handle_child_renamed(parent, parent_path, &from, &to, after_debounce_effects)
+                    .await
+            {
+                return;
+            }
         }
         self.handle_filesystem_remove_event(from, after_debounce_effects).await;
         self.handle_filesystem_change_event(to, after_debounce_effects).await;
@@ -150,7 +151,7 @@ impl BackendState {
     ) -> bool {
         match target {
             WatchTarget::ServersDat { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_servers_dirty();
                 }
                 true
@@ -178,36 +179,37 @@ impl BackendState {
                 true
             },
             WatchTarget::InstanceWorldDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(Some(path.clone()));
                 }
                 true
             },
             WatchTarget::InstanceSavesDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(None);
                 }
                 true
             },
             WatchTarget::ServersDat { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_servers_dirty();
                 }
                 // Minecraft moves the servers.dat to servers.dat_old and then back,
                 // so lets just re-listen immediately
-                if self.watcher.watch(path, notify::RecursiveMode::NonRecursive).is_ok() {
-                    self.watching.insert(path.clone(), target);
+                let mut file_watching = self.file_watching.write();
+                if file_watching.watcher.watch(path, notify::RecursiveMode::NonRecursive).is_ok() {
+                    file_watching.watching.insert(path.clone(), target);
                 }
                 true
             },
             WatchTarget::InstanceModsDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_mods_dirty(None);
                 }
                 true
             },
             WatchTarget::InstanceDotMinecraftDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(None);
                     instance.mark_servers_dirty();
                     instance.mark_mods_dirty(None);
@@ -226,8 +228,7 @@ impl BackendState {
     ) -> bool {
         match from_target {
             WatchTarget::InstanceDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id)
                     && from.parent() == to.parent()
                 {
                     let old_name = instance.name;
@@ -236,33 +237,23 @@ impl BackendState {
                     self.send.send_info(format!("Instance '{}' renamed to '{}'", old_name, instance.name));
                     self.send.send(instance.create_modify_message());
 
-                    let watching_dot_minecraft = instance.watching_dot_minecraft;
-                    let watching_saves_dir = instance.watching_saves_dir;
-                    let watching_server_dat = instance.watching_server_dat;
-                    let watching_mods_dir = instance.watching_mods_dir;
-                    let dot_minecraft_path = instance.dot_minecraft_path.clone();
-                    let saves_path = instance.saves_path.clone();
-                    let server_dat_path = instance.server_dat_path.clone();
-                    let mods_path = instance.mods_path.clone();
-
-                    self.watch_filesystem(to, WatchTarget::InstanceDir { id }).await;
-                    if watching_dot_minecraft {
-                        self.watch_filesystem(&dot_minecraft_path, WatchTarget::InstanceDotMinecraftDir { id })
-                            .await;
+                    self.watch_filesystem(to, WatchTarget::InstanceDir { id });
+                    if instance.watching_dot_minecraft {
+                        self.watch_filesystem(&instance.dot_minecraft_path, WatchTarget::InstanceDotMinecraftDir { id });
                     }
-                    if watching_saves_dir {
-                        self.watch_filesystem(&saves_path, WatchTarget::InstanceSavesDir { id }).await;
+                    if instance.watching_saves_dir {
+                        self.watch_filesystem(&instance.saves_path, WatchTarget::InstanceSavesDir { id });
                     }
-                    if watching_server_dat {
-                        self.watch_filesystem(&server_dat_path, WatchTarget::ServersDat { id }).await;
+                    if instance.watching_server_dat {
+                        self.watch_filesystem(&instance.server_dat_path, WatchTarget::ServersDat { id });
                     }
-                    if watching_mods_dir {
-                        self.watch_filesystem(&mods_path, WatchTarget::InstanceModsDir { id }).await;
+                    if instance.watching_mods_dir {
+                        self.watch_filesystem(&instance.mods_path, WatchTarget::InstanceModsDir { id });
                     }
-
-                    return true;
+                    true
+                } else {
+                    false
                 }
-                false
             },
             _ => false,
         }
@@ -280,7 +271,7 @@ impl BackendState {
                 if path.is_dir() {
                     let success = self.load_instance_from_path(path, false, true).await;
                     if !success {
-                        self.watch_filesystem(path, WatchTarget::InvalidInstanceDir).await;
+                        self.watch_filesystem(path, WatchTarget::InvalidInstanceDir);
                     }
                 }
             },
@@ -291,32 +282,23 @@ impl BackendState {
                 if file_name == "info_v1.json" {
                     self.load_instance_from_path(parent_path, true, true).await;
                 } else if file_name == ".minecraft"
-                    && let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
+                    && let Some(instance) = self.instance_state.write().instances.get_mut(id)
                 {
                     instance.mark_world_dirty(None);
                     instance.mark_servers_dirty();
                     instance.mark_mods_dirty(None);
 
-                    let watching_dot_minecraft = instance.watching_dot_minecraft;
-                    let watching_saves_dir = instance.watching_saves_dir;
-                    let watching_server_dat = instance.watching_server_dat;
-                    let watching_mods_dir = instance.watching_mods_dir;
-                    let saves_path = instance.saves_path.clone();
-                    let server_dat_path = instance.server_dat_path.clone();
-                    let mods_path = instance.mods_path.clone();
-
-                    if watching_dot_minecraft {
-                        self.watch_filesystem(path, WatchTarget::InstanceDotMinecraftDir { id }).await;
+                    if instance.watching_dot_minecraft {
+                        self.watch_filesystem(path, WatchTarget::InstanceDotMinecraftDir { id });
                     }
-                    if watching_saves_dir {
-                        self.watch_filesystem(&saves_path, WatchTarget::InstanceSavesDir { id }).await;
+                    if instance.watching_saves_dir {
+                        self.watch_filesystem(&instance.saves_path.clone(), WatchTarget::InstanceSavesDir { id });
                     }
-                    if watching_server_dat {
-                        self.watch_filesystem(&server_dat_path, WatchTarget::ServersDat { id }).await;
+                    if instance.watching_server_dat {
+                        self.watch_filesystem(&instance.server_dat_path.clone(), WatchTarget::ServersDat { id });
                     }
-                    if watching_mods_dir {
-                        self.watch_filesystem(&mods_path, WatchTarget::InstanceModsDir { id }).await;
+                    if instance.watching_mods_dir {
+                        self.watch_filesystem(&instance.mods_path.clone(), WatchTarget::InstanceModsDir { id });
                     }
                 }
             },
@@ -325,19 +307,19 @@ impl BackendState {
                 let Some(file_name) = path.file_name() else {
                     return;
                 };
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     match file_name.to_str() {
                         Some("mods") if instance.watching_mods_dir => {
                             instance.mark_mods_dirty(None);
-                            self.watch_filesystem(path, WatchTarget::InstanceModsDir { id }).await;
+                            self.watch_filesystem(path, WatchTarget::InstanceModsDir { id });
                         },
                         Some("saves") if instance.watching_saves_dir => {
                             instance.mark_world_dirty(None);
-                            self.watch_filesystem(path, WatchTarget::InstanceSavesDir { id }).await;
+                            self.watch_filesystem(path, WatchTarget::InstanceSavesDir { id });
                         },
                         Some("servers.dat") if instance.watching_server_dat => {
                             instance.mark_servers_dirty();
-                            self.watch_filesystem(path, WatchTarget::ServersDat { id }).await;
+                            self.watch_filesystem(path, WatchTarget::ServersDat { id });
                         },
                         _ => {},
                     }
@@ -353,20 +335,21 @@ impl BackendState {
             },
             WatchTarget::InstanceWorldDir { id } => {
                 // If a file inside the world folder is changed (e.g. icon.png), mark the world (parent) as dirty
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(Some(parent_path.into()));
                 }
             },
             WatchTarget::InstanceSavesDir { id } => {
                 // If a world folder is added to the saves directory, mark the world (path) as dirty
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(Some(path.clone()));
                 }
             },
             WatchTarget::InstanceModsDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index) && instance.id == id {
+                let mut instance_state = self.instance_state.write();
+                if let Some(instance) = instance_state.instances.get_mut(id) {
                     instance.mark_mods_dirty(Some(path.clone()));
-                    if let Some(reload_immediately) = self.reload_mods_immediately.take(&instance.id) {
+                    if let Some(reload_immediately) = instance_state.reload_mods_immediately.take(&id) {
                         after_debounce_effects.reload_mods.insert(reload_immediately);
                     }
                 }
@@ -388,29 +371,24 @@ impl BackendState {
                 };
                 if file_name == "info_v1.json" {
                     self.remove_instance(id).await;
-                    self.watch_filesystem(parent_path, WatchTarget::InvalidInstanceDir).await;
+                    self.watch_filesystem(parent_path, WatchTarget::InvalidInstanceDir);
                 }
             },
             WatchTarget::InstanceWorldDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
-                {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(Some(parent_path.into()));
                 }
             },
             WatchTarget::InstanceSavesDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
-                {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.mark_world_dirty(Some(path.clone()));
                 }
             },
             WatchTarget::InstanceModsDir { id } => {
-                if let Some(instance) = self.instances.get_mut(id.index)
-                    && instance.id == id
-                {
+                let mut instance_state = self.instance_state.write();
+                if let Some(instance) = instance_state.instances.get_mut(id) {
                     instance.mark_mods_dirty(Some(path.clone()));
-                    if let Some(reload_immediately) = self.reload_mods_immediately.take(&instance.id) {
+                    if let Some(reload_immediately) = instance_state.reload_mods_immediately.take(&id) {
                         after_debounce_effects.reload_mods.insert(reload_immediately);
                     }
                 }
