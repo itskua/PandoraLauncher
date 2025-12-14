@@ -15,6 +15,7 @@ use bridge::{
 use image::imageops::FilterType;
 use parking_lot::RwLock;
 use reqwest::{StatusCode, redirect::Policy};
+use schema::modrinth::ModrinthSideRequirement;
 use sha1::{Digest, Sha1};
 use tokio::sync::{mpsc::Receiver, OnceCell};
 
@@ -563,6 +564,12 @@ impl BackendState {
                 let downloads = downloads.clone();
 
                 let filtered_downloads = downloads.iter().filter(|dl| {
+                    if let Some(env) = dl.env {
+                        if env.client == ModrinthSideRequirement::Unsupported {
+                            return false;
+                        }
+                    }
+
                     !summary.disabled_children.contains(&*dl.path)
                 });
 

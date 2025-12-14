@@ -7,7 +7,7 @@ use image::imageops::FilterType;
 use indexmap::IndexMap;
 use parking_lot::{RwLock, RwLockReadGuard};
 use rustc_hash::FxHashMap;
-use schema::{content::ContentSource, modification::ModrinthModpackFileDownload, modrinth::ModrinthFile};
+use schema::{content::ContentSource, modification::ModrinthModpackFileDownload, modrinth::{ModrinthFile, ModrinthSideRequirement}};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use sha1::{Digest, Sha1};
@@ -242,9 +242,15 @@ impl ModMetadataManager {
         let lowercase_search_key = modrinth_index_json.name.to_lowercase();
 
         let summaries_fut = modrinth_index_json.files.iter().cloned().map(|download| {
-            async {
+            async move {
                 let this = self.clone();
                 tokio::task::spawn_blocking(move || {
+                    if let Some(env) = download.env {
+                        if env.client == ModrinthSideRequirement::Unsupported {
+                            return None;
+                        }
+                    }
+
                     let mut file_hash = [0u8; 20];
                     let Ok(_) = hex::decode_to_slice(&*download.hashes.sha1, &mut file_hash) else {
                         return None;

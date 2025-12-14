@@ -64,7 +64,7 @@ pub struct ModrinthHit {
     // pub featured_gallery: Option<Arc<str>>,
 }
 
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModrinthSideRequirement {
     Required,
