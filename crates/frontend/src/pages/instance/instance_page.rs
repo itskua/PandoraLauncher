@@ -89,8 +89,19 @@ impl Render for InstancePage {
                 }),
         };
 
+        let open_dot_minecraft_button = Button::new("open_dot_minecraft")
+            .info()
+            .icon(IconName::FolderOpen)
+            .label("Open .minecraft folder")
+            .on_click({
+            let dot_minecraft = instance.dot_minecraft_folder.clone();
+            move |_, window, cx| {
+                crate::open_folder(&dot_minecraft, window, cx);
+            }
+        });
+
         let breadcrumb = (self.breadcrumb)().child(self.title.clone());
-        ui::page(cx, h_flex().gap_8().child(breadcrumb).child(button))
+        ui::page(cx, h_flex().gap_8().child(breadcrumb).child(h_flex().gap_3().child(button).child(open_dot_minecraft_button)))
             .child(
                 TabBar::new("bar")
                     .prefix(div().w_4())

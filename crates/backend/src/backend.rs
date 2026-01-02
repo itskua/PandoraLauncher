@@ -288,6 +288,7 @@ impl BackendState {
             let message = MessageToFrontend::InstanceAdded {
                 id: instance.id,
                 name: instance.name,
+                dot_minecraft_folder: instance.dot_minecraft_path.clone(),
                 version: instance.version,
                 loader: instance.loader,
                 worlds_state: Arc::clone(&instance.worlds_state),

@@ -108,6 +108,7 @@ pub enum MessageToFrontend {
     InstanceAdded {
         id: InstanceID,
         name: Ustr,
+        dot_minecraft_folder: Arc<Path>,
         version: Ustr,
         loader: Loader,
         worlds_state: Arc<AtomicBridgeDataLoadState>,
@@ -120,6 +121,7 @@ pub enum MessageToFrontend {
     InstanceModified {
         id: InstanceID,
         name: Ustr,
+        dot_minecraft_folder: Arc<Path>,
         version: Ustr,
         loader: Loader,
         status: InstanceStatus,

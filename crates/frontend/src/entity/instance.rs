@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use bridge::{
     instance::{InstanceID, InstanceModSummary, InstanceServerSummary, InstanceStatus, InstanceWorldSummary},
@@ -18,6 +18,7 @@ impl InstanceEntries {
         entity: &Entity<Self>,
         id: InstanceID,
         name: SharedString,
+        dot_minecraft_folder: Arc<Path>,
         version: SharedString,
         loader: Loader,
         worlds_state: Arc<AtomicBridgeDataLoadState>,
@@ -29,6 +30,7 @@ impl InstanceEntries {
             let instance = InstanceEntry {
                 id,
                 name,
+                dot_minecraft_folder,
                 version,
                 loader,
                 status: InstanceStatus::NotRunning,
@@ -73,6 +75,7 @@ impl InstanceEntries {
         entity: &Entity<Self>,
         id: InstanceID,
         name: SharedString,
+        dot_minecraft_folder: Arc<Path>,
         version: SharedString,
         loader: Loader,
         status: InstanceStatus,
@@ -82,6 +85,7 @@ impl InstanceEntries {
             if let Some(instance) = entries.entries.get_mut(&id) {
                 let cloned = instance.update(cx, |instance, cx| {
                     instance.name = name.clone();
+                    instance.dot_minecraft_folder = dot_minecraft_folder.clone();
                     instance.version = version.clone();
                     instance.loader = loader;
                     instance.status = status;
@@ -161,6 +165,7 @@ impl InstanceEntries {
 pub struct InstanceEntry {
     pub id: InstanceID,
     pub name: SharedString,
+    pub dot_minecraft_folder: Arc<Path>,
     pub version: SharedString,
     pub loader: Loader,
     pub status: InstanceStatus,

@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use gpui::{*, prelude::*};
-use gpui_component::{button::{Button, ButtonVariants}, select::{SearchableVec, Select, SelectEvent, SelectState}, sheet::Sheet, tab::{Tab, TabBar, TabVariant}, v_flex, ActiveTheme, ThemeRegistry};
+use gpui_component::{button::{Button, ButtonVariants}, select::{SearchableVec, Select, SelectEvent, SelectState}, sheet::Sheet, tab::{Tab, TabBar, TabVariant}, v_flex, ActiveTheme, IconName, ThemeRegistry};
 
 use crate::interface_config::InterfaceConfig;
 
@@ -75,13 +75,13 @@ impl Render for Settings {
                 "Theme",
                 Select::new(&self.theme_select)
             ))
-            .child(Button::new("open-theme-folder").success().label("Open theme folder").on_click({
+            .child(Button::new("open-theme-folder").info().icon(IconName::FolderOpen).label("Open theme folder").on_click({
                 let theme_folder = self.theme_folder.clone();
                 move |_, window, cx| {
                     crate::open_folder(&theme_folder, window, cx);
                 }
             }))
-            .child(Button::new("open-theme-repo").success().label("Open theme repository").on_click({
+            .child(Button::new("open-theme-repo").info().icon(IconName::Globe).label("Open theme repository").on_click({
                 move |_, _, cx| {
                     cx.open_url("https://github.com/longbridge/gpui-component/tree/main/themes");
                 }

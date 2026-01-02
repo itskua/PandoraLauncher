@@ -130,9 +130,9 @@ impl Render for SyncingPage {
         let content = v_flex().size_full().p_3().gap_3()
             .child("These options allow for syncing various files/folders across instances")
             .when_some(sync_folder, |this, sync_folder| {
-                this.child(Button::new("open").label("Open synced folders directory").on_click(move |_, window, cx| {
+                this.child(Button::new("open").info().icon(IconName::FolderOpen).label("Open synced folders directory").on_click(move |_, window, cx| {
                     crate::open_folder(&sync_folder, window, cx);
-                }).w_64().info())
+                }).w_72())
             })
             .child(div().border_b_1().border_color(cx.theme().border).text_lg().child("Files"))
             .child(self.create_entry("options", "Sync options.txt", SyncTarget::Options, warning, info, cx))

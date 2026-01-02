@@ -695,6 +695,7 @@ impl Instance {
         MessageToFrontend::InstanceModified {
             id: self.id,
             name: self.name,
+            dot_minecraft_folder: self.dot_minecraft_path.clone(),
             version: self.version,
             loader: self.loader,
             status,
