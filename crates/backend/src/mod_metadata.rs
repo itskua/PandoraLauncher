@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, fs::File, io::{Cursor, Read, Seek, Write}, path::{Path, PathBuf}, sync::{atomic::AtomicBool, Arc}
+    collections::HashMap, fs::File, io::{Cursor, Write}, path::{Path, PathBuf}, sync::Arc
 };
 
 use bridge::instance::{AtomicContentUpdateStatus, ContentUpdateStatus, LoaderSpecificModSummary, ModSummary};
@@ -7,12 +7,12 @@ use image::imageops::FilterType;
 use indexmap::IndexMap;
 use parking_lot::{RwLock, RwLockReadGuard};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rc_zip_sync::EntryHandle;
 use rustc_hash::FxHashMap;
 use schema::{content::ContentSource, modification::ModrinthModpackFileDownload, modrinth::{ModrinthFile, ModrinthSideRequirement}};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
 use sha1::{Digest, Sha1};
-use zip::{read::ZipFile, ZipArchive};
 
 #[derive(Clone)]
 pub enum ModUpdateAction {
@@ -138,23 +138,18 @@ impl ModMetadataManager {
     }
 
     fn load_mod_summary<R: rc_zip_sync::ReadZip>(self: &Arc<Self>, hash: [u8; 20], file: &R, allow_children: bool) -> Option<Arc<ModSummary>> {
-        let start = std::time::Instant::now();
         let archive = file.read_zip().ok()?;
-        // let archive = zip::ZipArchive::new(file).ok()?;
-        println!("opening archive: {:?}", std::time::Instant::now() - start);
 
-        if archive.by_name("fabric.mod.json").is_some() {
-            Self::load_fabric_mod(hash, archive)
-        } else if allow_children && archive.by_name("modrinth.index.json").is_some() {
-            self.load_modrinth_modpack(hash, archive)
+        if let Some(file) = archive.by_name("fabric.mod.json") {
+            Self::load_fabric_mod(hash, &archive, file)
+        } else if allow_children && let Some(file) = archive.by_name("modrinth.index.json") {
+            self.load_modrinth_modpack(hash, &archive, file)
         } else {
             None
         }
     }
 
-    fn load_fabric_mod<R: rc_zip_sync::HasCursor>(hash: [u8; 20], mut archive: rc_zip_sync::ArchiveHandle<R>) -> Option<Arc<ModSummary>> {
-        let file = archive.by_name("fabric.mod.json")?;
-
+    fn load_fabric_mod<R: rc_zip_sync::HasCursor>(hash: [u8; 20], archive: &rc_zip_sync::ArchiveHandle<R>, file: EntryHandle<'_, R>) -> Option<Arc<ModSummary>> {
         let mut bytes = file.bytes().ok()?;
 
         // Some mods violate the JSON spec by using raw newline characters inside strings (e.g. BetterGrassify)
@@ -211,48 +206,45 @@ impl ModMetadataManager {
         }))
     }
 
-    fn load_modrinth_modpack<R: rc_zip_sync::HasCursor>(self: &Arc<Self>, hash: [u8; 20], mut archive: rc_zip_sync::ArchiveHandle<R>) -> Option<Arc<ModSummary>> {
-        let file = archive.by_name("modrinth.index.json")?;
-
-        // todo: don't unwrap here
-        let modrinth_index_json: ModrinthIndexJson = serde_json::from_slice(&file.bytes().unwrap()).unwrap();
+    fn load_modrinth_modpack<R: rc_zip_sync::HasCursor>(self: &Arc<Self>, hash: [u8; 20], archive: &rc_zip_sync::ArchiveHandle<R>, file: EntryHandle<'_, R>) -> Option<Arc<ModSummary>> {
+        let modrinth_index_json: ModrinthIndexJson = serde_json::from_slice(&file.bytes().ok()?).inspect_err(|e| {
+            eprintln!("Error parsing modrinth.index.json: {e}");
+        }).ok()?;
 
         let mut overrides: IndexMap<Arc<Path>, Arc<[u8]>> = IndexMap::new();
 
         for entry in archive.entries() {
-            let Some(sanitized) = file.sanitized_name() else {
+            if entry.kind() != rc_zip_sync::rc_zip::EntryKind::File {
                 continue;
-            };
-            if file.kind() != rc_zip_sync::rc_zip::EntryKind::File {
+            }
+            let path: PathBuf = typed_path::Utf8UnixPath::new(&entry.name).with_platform_encoding().into();
+            if !crate::is_relative_normal_path(&path) {
+                eprintln!("Path is not relative or normal, attempted exploit?: {}", &entry.name);
                 continue;
             }
 
-            let (prioritize, path) = if let Some(path) = sanitized.strip_prefix("overrides") {
+            let (prioritize, path) = if let Ok(path) = path.strip_prefix("overrides") {
                 (false, path)
-            } else if let Some(path) = sanitized.strip_prefix("client-overrides") {
+            } else if let Ok(path) = path.strip_prefix("client-overrides") {
                 (true, path)
             } else {
                 continue;
             };
 
-            // todo: finish this
-            // let path = path.into();
+            let path = Arc::from(path);
 
-            // if !prioritize && overrides.contains_key(&path) {
-            //     continue;
-            // }
+            if !prioritize && overrides.contains_key(&path) {
+                continue;
+            }
 
-            // let mut data = Vec::with_capacity(file.size() as usize);
-            // if file.read_to_end(&mut data).is_err() {
-            //     continue;
-            // }
-            // overrides.insert(path, data.into());
+            let Ok(data) = entry.bytes() else {
+                continue;
+            };
+            overrides.insert(path, data.into());
         }
 
         let lowercase_search_key = modrinth_index_json.name.to_lowercase();
 
-        let this = self.clone();
-        let start = std::time::Instant::now();
         let summaries = modrinth_index_json.files.par_iter().map(|download| {
             if let Some(env) = download.env {
                 if env.client == ModrinthSideRequirement::Unsupported {
@@ -265,31 +257,29 @@ impl ModMetadataManager {
                 return None;
             };
 
-            if let Some(cached) = this.by_hash.read().get(&file_hash).cloned() {
+            if let Some(cached) = self.by_hash.read().get(&file_hash).cloned() {
                 return cached;
             }
 
             let file_hash_as_str = hex::encode(file_hash);
 
-            let mut file = this.content_library_dir.join(&file_hash_as_str[..2]);
+            let mut file = self.content_library_dir.join(&file_hash_as_str[..2]);
             file.push(&file_hash_as_str);
             if let Some(extension) = typed_path::Utf8UnixPath::new(&*download.path).extension() {
                 file.set_extension(extension);
             }
 
             if let Ok(mut file) = std::fs::File::open(file) {
-                dbg!(&download.path);
-                let summary = this.load_mod_summary(file_hash, &mut file, false);
-                this.put(file_hash, summary.clone());
+                let summary = self.load_mod_summary(file_hash, &mut file, false);
+                self.put(file_hash, summary.clone());
                 return summary;
             }
 
-            this.parents_by_missing_child.write().entry(file_hash).or_default().push(hash);
+            self.parents_by_missing_child.write().entry(file_hash).or_default().push(hash);
 
             None
         });
         let summaries: Vec<_> = summaries.collect();
-        dbg!(std::time::Instant::now() - start);
 
         let mut png_icon = None;
 
@@ -323,8 +313,7 @@ impl ModMetadataManager {
     }
 }
 
-fn load_icon<R: rc_zip_sync::HasCursor>(mut icon_file: rc_zip_sync::EntryHandle<R>) -> Option<Arc<[u8]>> {
-    // let mut icon_bytes = Vec::with_capacity(icon_file.size() as usize);
+fn load_icon<R: rc_zip_sync::HasCursor>(icon_file: rc_zip_sync::EntryHandle<R>) -> Option<Arc<[u8]>> {
     let Ok(mut icon_bytes) = icon_file.bytes() else {
         return None;
     };

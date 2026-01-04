@@ -13,6 +13,7 @@ use bridge::{
     handle::FrontendHandle, instance::LoaderSpecificModSummary, message::{MessageToFrontend, QuickPlayLaunch}, modal_action::{ModalAction, ProgressTracker, ProgressTrackerFinishType, ProgressTrackers}
 };
 use futures::{FutureExt, TryFutureExt};
+use rc_zip_sync::ReadZip;
 use regex::Regex;
 use schema::{
     assets_index::AssetsIndex, fabric_launch::FabricLaunch, instance::InstanceConfiguration, java_runtime_component::{JavaRuntimeComponentFile, JavaRuntimeComponentManifest}, loader::Loader, version::{
@@ -150,18 +151,19 @@ impl Launcher {
                 let Ok(file) = std::fs::File::open(library_path) else {
                     continue;
                 };
-                let Ok(mut archive) = zip::ZipArchive::new(file) else {
+                let Ok(archive) = file.read_zip() else {
                     continue;
                 };
-                for i in 0..archive.len() {
-                    let mut file = archive.by_index(i).unwrap();
-                    let Some(name) = file.enclosed_name() else {
+                for file in archive.entries() {
+                    let path: PathBuf = typed_path::Utf8UnixPath::new(&file.name).with_platform_encoding().into();
+                    if !crate::is_relative_normal_path(&path) {
+                        eprintln!("Path is not relative or normal, attempted exploit?: {}", &file.name);
                         continue;
-                    };
+                    }
                     if let Some(exclude) = &extract_options.exclude {
                         let mut skip = false;
                         for to_exclude in exclude.iter() {
-                            if name.starts_with(to_exclude) {
+                            if path.starts_with(to_exclude) {
                                 skip = true;
                                 break;
                             }
@@ -171,14 +173,18 @@ impl Launcher {
                         }
                     }
 
-                    let output_path = natives_dir.join(&name);
-                    if file.is_dir() {
-                        let _ = std::fs::create_dir(output_path);
-                    } else if file.is_file() {
-                        let Ok(mut outfile) = std::fs::File::create(&output_path) else {
-                            continue;
-                        };
-                        let _ = std::io::copy(&mut file, &mut outfile);
+                    let output_path = natives_dir.join(&path);
+                    match file.kind() {
+                        rc_zip_sync::rc_zip::EntryKind::Directory => {
+                            let _ = std::fs::create_dir(output_path);
+                        },
+                        rc_zip_sync::rc_zip::EntryKind::File => {
+                            let Ok(mut outfile) = std::fs::File::create(&output_path) else {
+                                continue;
+                            };
+                            let _ = std::io::copy(&mut file.reader(), &mut outfile);
+                        },
+                        rc_zip_sync::rc_zip::EntryKind::Symlink => {},
                     }
                 }
             } else {
