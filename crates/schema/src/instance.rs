@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use ustr::Ustr;
@@ -12,7 +12,9 @@ pub struct InstanceConfiguration {
     #[serde(default, deserialize_with = "crate::try_deserialize", skip_serializing_if = "is_default_memory_configuration")]
     pub memory: Option<InstanceMemoryConfiguration>,
     #[serde(default, deserialize_with = "crate::try_deserialize", skip_serializing_if = "is_default_jvm_flags_configuration")]
-    pub jvm_flags: Option<InstanceJvmFlagsConfiguration>
+    pub jvm_flags: Option<InstanceJvmFlagsConfiguration>,
+    #[serde(default, deserialize_with = "crate::try_deserialize", skip_serializing_if = "is_default_jvm_binary_configuration")]
+    pub jvm_binary: Option<InstanceJvmBinaryConfiguration>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -56,6 +58,20 @@ pub struct InstanceJvmFlagsConfiguration {
 fn is_default_jvm_flags_configuration(config: &Option<InstanceJvmFlagsConfiguration>) -> bool {
     if let Some(config) = config {
         !config.enabled && config.flags.trim_ascii().is_empty()
+    } else {
+        true
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct InstanceJvmBinaryConfiguration {
+    pub enabled: bool,
+    pub path: Option<Arc<Path>>,
+}
+
+fn is_default_jvm_binary_configuration(config: &Option<InstanceJvmBinaryConfiguration>) -> bool {
+    if let Some(config) = config {
+        !config.enabled && config.path.is_none()
     } else {
         true
     }

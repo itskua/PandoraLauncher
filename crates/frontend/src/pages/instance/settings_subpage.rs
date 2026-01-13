@@ -1,11 +1,13 @@
+use std::{borrow::Cow, path::Path, sync::Arc};
+
 use bridge::{
     handle::BackendHandle, instance::InstanceID, message::MessageToBackend
 };
 use gpui::{prelude::*, *};
 use gpui_component::{
-    button::{Button, ButtonVariants}, checkbox::Checkbox, h_flex, input::{Input, InputEvent, InputState, NumberInput, NumberInputEvent}, v_flex, ActiveTheme as _, Disableable, Sizable
+    button::{Button, ButtonVariants}, checkbox::Checkbox, h_flex, input::{Input, InputEvent, InputState, NumberInput, NumberInputEvent}, notification::{Notification, NotificationType}, v_flex, ActiveTheme as _, Disableable, Sizable, WindowExt
 };
-use schema::instance::{InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration};
+use schema::instance::{InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration};
 
 use crate::entity::instance::InstanceEntry;
 
@@ -25,8 +27,11 @@ pub struct InstanceSettingsSubpage {
     memory_max_input_state: Entity<InputState>,
     jvm_flags_enabled: bool,
     jvm_flags_input_state: Entity<InputState>,
+    jvm_binary_enabled: bool,
+    jvm_binary_path: Option<Arc<Path>>,
     new_name_change_state: NewNameChangeState,
     backend_handle: BackendHandle,
+    _select_file_task: Task<()>,
 }
 
 impl InstanceSettingsSubpage {
@@ -44,6 +49,7 @@ impl InstanceSettingsSubpage {
 
         let memory = entry.configuration.memory.unwrap_or_default();
         let jvm_flags = entry.configuration.jvm_flags.clone().unwrap_or_default();
+        let jvm_binary = entry.configuration.jvm_binary.clone().unwrap_or_default();
 
         let memory_min_input_state = cx.new(|cx| {
             InputState::new(window, cx).default_value(memory.min.to_string())
@@ -70,8 +76,11 @@ impl InstanceSettingsSubpage {
             memory_max_input_state,
             jvm_flags_enabled: jvm_flags.enabled,
             jvm_flags_input_state,
+            jvm_binary_enabled: jvm_binary.enabled,
+            jvm_binary_path: jvm_binary.path.clone(),
             new_name_change_state: NewNameChangeState::NoChange,
             backend_handle,
+            _select_file_task: Task::ready(())
         }
     }
 }
@@ -181,6 +190,13 @@ impl InstanceSettingsSubpage {
             flags: flags.into(),
         }
     }
+
+    fn get_jvm_binary_configuration(&self) -> InstanceJvmBinaryConfiguration {
+        InstanceJvmBinaryConfiguration {
+            enabled: self.jvm_binary_enabled,
+            path: self.jvm_binary_path.clone(),
+        }
+    }
 }
 
 impl Render for InstanceSettingsSubpage {
@@ -195,6 +211,13 @@ impl Render for InstanceSettingsSubpage {
 
         let memory_override_enabled = self.memory_override_enabled;
         let jvm_flags_enabled = self.jvm_flags_enabled;
+        let jvm_binary_enabled = self.jvm_binary_enabled;
+
+        let jvm_binary_label = if let Some(path) = &self.jvm_binary_path {
+            SharedString::new(path.to_string_lossy())
+        } else {
+            SharedString::new_static("<unset>")
+        };
 
         let content = v_flex()
             .p_4()
@@ -259,6 +282,56 @@ impl Render for InstanceSettingsSubpage {
                     }
                 })))
                 .child(div().max_w_64().child(Input::new(&self.jvm_flags_input_state).disabled(!jvm_flags_enabled)))
+            )
+            .child(v_flex()
+                .gap_1()
+                .child(Checkbox::new("jvm_binary").label("Override JVM Binary").checked(jvm_binary_enabled).on_click(cx.listener(|page, value, _, cx| {
+                    if page.jvm_binary_enabled != *value {
+                        page.jvm_binary_enabled = *value;
+                        page.backend_handle.send(MessageToBackend::SetInstanceJvmBinary {
+                            id: page.instance_id,
+                            jvm_binary: page.get_jvm_binary_configuration()
+                        });
+                        cx.notify();
+                    }
+                })))
+                .child(div().max_w_64().child(Button::new("select_jvm_binary").success().label(jvm_binary_label).disabled(!jvm_binary_enabled).on_click(cx.listener(|this, _, window, cx| {
+                    let receiver = cx.prompt_for_paths(PathPromptOptions {
+                        files: true,
+                        directories: false,
+                        multiple: false,
+                        prompt: Some("Select JVM binary".into())
+                    });
+
+                    let this_entity = cx.entity();
+                    let add_from_file_task = window.spawn(cx, async move |cx| {
+                        let Ok(result) = receiver.await else {
+                            return;
+                        };
+                        _ = cx.update_window_entity(&this_entity, move |this, window, cx| {
+                            match result {
+                                Ok(Some(paths)) => {
+                                    this.jvm_binary_path = paths.first().map(|v| v.as_path().into());
+                                    this.backend_handle.send(MessageToBackend::SetInstanceJvmBinary {
+                                        id: this.instance_id,
+                                        jvm_binary: this.get_jvm_binary_configuration()
+                                    });
+                                    cx.notify();
+                                },
+                                Ok(None) => {},
+                                Err(error) => {
+                                    let error = format!("{}", error);
+                                    let notification = Notification::new()
+                                        .autohide(false)
+                                        .with_type(NotificationType::Error)
+                                        .title(error);
+                                    window.push_notification(notification, cx);
+                                },
+                            }
+                        });
+                    });
+                    this._select_file_task = add_from_file_task;
+                }))))
             )
             .child(Button::new("delete").max_w_64().label("Delete this instance").danger().on_click({
                 let instance = self.instance.clone();

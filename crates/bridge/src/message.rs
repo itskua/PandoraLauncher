@@ -1,7 +1,7 @@
 use std::{ffi::OsString, path::Path, sync::Arc};
 
 use enumset::{EnumSet, EnumSetType};
-use schema::{instance::{InstanceConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader};
+use schema::{instance::{InstanceConfiguration, InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader};
 use ustr::Ustr;
 use uuid::Uuid;
 
@@ -36,6 +36,10 @@ pub enum MessageToBackend {
     SetInstanceJvmFlags {
         id: InstanceID,
         jvm_flags: InstanceJvmFlagsConfiguration,
+    },
+    SetInstanceJvmBinary {
+        id: InstanceID,
+        jvm_binary: InstanceJvmBinaryConfiguration,
     },
     KillInstance {
         id: InstanceID,

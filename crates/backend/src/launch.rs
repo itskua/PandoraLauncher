@@ -128,6 +128,7 @@ impl Launcher {
         let mojang_java_binary_future = self.load_mojang_java_binary(
             &self.meta,
             http_client,
+            &instance_info,
             &version_info,
             &modal_action.trackers,
             launch_tracker,
@@ -502,6 +503,7 @@ impl Launcher {
         let mojang_java_binary_future = self.load_mojang_java_binary(
             &self.meta,
             http_client,
+            instance_info,
             &base_version,
             progress_trackers,
             launch_tracker,
@@ -761,10 +763,19 @@ impl Launcher {
         &self,
         meta: &MetadataManager,
         http_client: &reqwest::Client,
+        configuration: &InstanceConfiguration,
         version_info: &MinecraftVersion,
         progress_trackers: &ProgressTrackers,
         launch_tracker: &ProgressTracker,
     ) -> Result<PathBuf, LoadJavaRuntimeError> {
+        if let Some(jvm_binary) = &configuration.jvm_binary {
+            if jvm_binary.enabled && let Some(path) = &jvm_binary.path {
+                if let Some(binary) = Self::search_for_java_binary(&path) {
+                    return Ok(binary);
+                }
+            }
+        }
+
         let platform: Ustr = match (std::env::consts::OS, std::env::consts::ARCH) {
             ("linux", "x86_64") => "linux".into(),
             ("linux", "x86") => "linux-i386".into(),
@@ -1091,6 +1102,41 @@ impl Launcher {
             }
             false
         }
+    }
+
+    fn search_for_java_binary(path: &Path) -> Option<PathBuf> {
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+
+        let paths: &[&'static str] = if std::env::consts::OS == "linux" {
+            &["bin", "java"]
+        } else if std::env::consts::OS == "macos" {
+            &["jre.bundle", "Contents", "Home", "bin", "java"]
+        } else if std::env::consts::OS == "windows" {
+            &["bin", "javaw.exe"]
+        } else {
+            return None;
+        };
+
+        for start in (0..paths.len()).rev() {
+            let mut new_path = path.to_path_buf();
+            for fragment_index in start..paths.len() {
+                let fragment = paths[fragment_index];
+                new_path.push(fragment);
+                if fragment_index == paths.len()-1 {
+                    if new_path.is_file() {
+                        return Some(new_path);
+                    } else {
+                        break;
+                    }
+                } else if !new_path.is_dir() {
+                    break;
+                }
+            }
+        }
+
+        None
     }
 }
 

@@ -943,6 +943,7 @@ impl BackendState {
             loader,
             memory: None,
             jvm_flags: None,
+            jvm_binary: None,
         };
 
         let info_path = instance_dir.join("info_v1.json");
