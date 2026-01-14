@@ -110,6 +110,8 @@ impl Settings {
 
 impl Render for Settings {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let interface_config = InterfaceConfig::get(cx);
+
         let mut div = v_flex()
             .px_4()
             .py_3()
@@ -128,7 +130,22 @@ impl Render for Settings {
                 move |_, _, cx| {
                     cx.open_url("https://github.com/longbridge/gpui-component/tree/main/themes");
                 }
-            }));
+            }))
+            .child(crate::labelled("Deletion",
+                v_flex().gap_2()
+                    .child(Checkbox::new("confirm-delete-mods")
+                        .label("Shift+Click to skip mod delete confirmation")
+                        .checked(interface_config.quick_delete_mods)
+                        .on_click(|value, _, cx| {
+                            InterfaceConfig::get_mut(cx).quick_delete_mods = *value;
+                        }))
+                    .child(Checkbox::new("confirm-delete-instance")
+                        .label("Shift+Click to skip instance delete confirmation")
+                        .checked(interface_config.quick_delete_instance).on_click(|value, _, cx| {
+                            InterfaceConfig::get_mut(cx).quick_delete_instance = *value;
+                        }))
+                    )
+            );
 
         if let Some(backend_config) = &self.backend_config {
             div = div

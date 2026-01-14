@@ -9,7 +9,7 @@ use gpui_component::{
 };
 use schema::instance::{InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration};
 
-use crate::entity::instance::InstanceEntry;
+use crate::{entity::instance::InstanceEntry, interface_config::InterfaceConfig};
 
 #[derive(PartialEq, Eq)]
 enum NewNameChangeState {
@@ -336,11 +336,19 @@ impl Render for InstanceSettingsSubpage {
             .child(Button::new("delete").max_w_64().label("Delete this instance").danger().on_click({
                 let instance = self.instance.clone();
                 let backend_handle = self.backend_handle.clone();
-                move |_, window, cx| {
+                move |click: &ClickEvent, window, cx| {
                     let instance = instance.read(cx);
                     let id = instance.id;
                     let name = instance.name.clone();
-                    crate::modals::delete_instance::open_delete_instance(id, name, backend_handle.clone(), window, cx);
+
+                    if InterfaceConfig::get(cx).quick_delete_instance && click.modifiers().shift {
+                        backend_handle.send(bridge::message::MessageToBackend::DeleteInstance {
+                            id
+                        });
+                    } else {
+                        crate::modals::delete_instance::open_delete_instance(id, name, backend_handle.clone(), window, cx);
+                    }
+
                 }
             }));
 

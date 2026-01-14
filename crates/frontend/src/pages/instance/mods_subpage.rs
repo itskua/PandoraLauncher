@@ -14,7 +14,7 @@ use rustc_hash::FxHashSet;
 use schema::{content::ContentSource, loader::Loader};
 use ustr::Ustr;
 
-use crate::{entity::instance::InstanceEntry, png_render_cache, root};
+use crate::{entity::instance::InstanceEntry, interface_config::InterfaceConfig, png_render_cache, root};
 
 use super::instance_page::InstanceSubpageType;
 
@@ -264,11 +264,7 @@ impl ModsListDelegate {
                     let delegate = this.delegate();
                     if delegate.is_selected(element_id) {
                         let mod_ids = delegate.mods.iter().filter_map(|summary| {
-                            if delegate.is_selected(summary.filename_hash) {
-                                Some(summary.id)
-                            } else {
-                                None
-                            }
+                            delegate.is_selected(summary.filename_hash).then(|| summary.id)
                         }).collect();
 
                         backend_handle.send(MessageToBackend::DeleteMod { id, mod_ids });
@@ -280,9 +276,25 @@ impl ModsListDelegate {
         } else {
             let trash_icon = Icon::default().path("icons/trash-2.svg");
             let confirming_delete = self.confirming_delete.clone();
-            Button::new(("delete", element_id)).danger().icon(trash_icon).on_click(cx.listener(move |this, checked, _, cx| {
+            let backend_handle = self.backend_handle.clone();
+            Button::new(("delete", element_id)).danger().icon(trash_icon).on_click(cx.listener(move |this, click: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 let delegate = this.delegate();
+
+                // If quick_delete_mods is enabled and shift clicking, delete instantly
+                if InterfaceConfig::get(cx).quick_delete_mods && click.modifiers().shift {
+                    if delegate.is_selected(element_id) {
+                        let mod_ids = delegate.mods.iter().filter_map(|summary| {
+                            delegate.is_selected(summary.filename_hash).then(|| summary.id)
+                        }).collect();
+
+                        backend_handle.send(MessageToBackend::DeleteMod { id, mod_ids });
+                    } else {
+                        backend_handle.send(MessageToBackend::DeleteMod { id, mod_ids: vec![mod_id] });
+                    }
+                    return;
+                }
+
                 let mut confirming_delete = confirming_delete.lock();
                 confirming_delete.clear();
                 if delegate.is_selected(element_id) {
