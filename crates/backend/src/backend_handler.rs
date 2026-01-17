@@ -79,6 +79,13 @@ impl BackendState {
             MessageToBackend::RenameInstance { id, name } => {
                 self.rename_instance(id, &name).await;
             },
+            MessageToBackend::SetInstanceMinecraftVersion { id, version } => {
+                if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
+                    instance.configuration.modify(|configuration| {
+                        configuration.minecraft_version = version;
+                    });
+                }
+            },
             MessageToBackend::SetInstanceLoader { id, loader } => {
                 if let Some(instance) = self.instance_state.write().instances.get_mut(id) {
                     instance.configuration.modify(|configuration| {

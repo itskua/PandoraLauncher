@@ -29,6 +29,10 @@ pub enum MessageToBackend {
         id: InstanceID,
         name: Ustr,
     },
+    SetInstanceMinecraftVersion {
+        id: InstanceID,
+        version: Ustr
+    },
     SetInstanceLoader {
         id: InstanceID,
         loader: Loader

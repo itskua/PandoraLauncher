@@ -7,9 +7,9 @@ use gpui::{prelude::*, *};
 use gpui_component::{
     ActiveTheme as _, Disableable, Selectable, Sizable, WindowExt, button::{Button, ButtonGroup, ButtonVariants}, checkbox::Checkbox, h_flex, input::{Input, InputEvent, InputState, NumberInput, NumberInputEvent}, notification::{Notification, NotificationType}, select::{SearchableVec, Select, SelectEvent, SelectState}, spinner::Spinner, v_flex
 };
-use schema::{fabric_loader_manifest::FabricLoaderManifest, forge::{ForgeMavenManifest, NeoforgeMavenManifest}, instance::{InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader};
+use schema::{fabric_loader_manifest::FabricLoaderManifest, forge::{ForgeMavenManifest, NeoforgeMavenManifest}, instance::{InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader, version_manifest::MinecraftVersionManifest};
 
-use crate::{entity::{DataEntities, instance::InstanceEntry, metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult, FrontendMetadataState, TypelessFrontendMetadataResult}}, interface_config::InterfaceConfig};
+use crate::{entity::{DataEntities, instance::InstanceEntry, metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult, FrontendMetadataState, TypelessFrontendMetadataResult}}, interface_config::InterfaceConfig, pages::instances_page::VersionList};
 
 #[derive(PartialEq, Eq)]
 enum NewNameChangeState {
@@ -22,9 +22,12 @@ pub struct InstanceSettingsSubpage {
     data: DataEntities,
     instance: Entity<InstanceEntry>,
     instance_id: InstanceID,
-    loader: Loader,
-    loader_version_select_state: Entity<SelectState<SearchableVec<&'static str>>>,
     new_name_input_state: Entity<InputState>,
+    version_state: TypelessFrontendMetadataResult,
+    version_select_state: Entity<SelectState<VersionList>>,
+    loader: Loader,
+    loader_versions_state: TypelessFrontendMetadataResult,
+    loader_version_select_state: Entity<SelectState<SearchableVec<&'static str>>>,
     memory_override_enabled: bool,
     memory_min_input_state: Entity<InputState>,
     memory_max_input_state: Entity<InputState>,
@@ -34,7 +37,6 @@ pub struct InstanceSettingsSubpage {
     jvm_binary_path: Option<Arc<Path>>,
     new_name_change_state: NewNameChangeState,
     backend_handle: BackendHandle,
-    loader_versions_state: TypelessFrontendMetadataResult,
     _observe_loader_version_subscription: Option<Subscription>,
     _select_file_task: Task<()>,
 }
@@ -56,6 +58,17 @@ impl InstanceSettingsSubpage {
         let jvm_flags = entry.configuration.jvm_flags.clone().unwrap_or_default();
         let jvm_binary = entry.configuration.jvm_binary.clone().unwrap_or_default();
 
+        let new_name_input_state = cx.new(|cx| InputState::new(window, cx));
+        cx.subscribe(&new_name_input_state, Self::on_new_name_input).detach();
+
+        let minecraft_versions = FrontendMetadata::request(&data.metadata, MetadataRequest::MinecraftVersionManifest, cx);
+
+        let version_select_state = cx.new(|cx| SelectState::new(VersionList::default(), None, window, cx).searchable(true));
+        cx.observe_in(&minecraft_versions, window, |page, versions, window, cx| {
+            page.update_minecraft_versions(versions, window, cx);
+        }).detach();
+        cx.subscribe(&version_select_state, Self::on_minecraft_version_selected).detach();
+
         cx.observe_in(instance, window, |page, instance, window, cx| {
             if page.loader_version_select_state.read(cx).selected_index(cx).is_none() {
                 let version = instance.read(cx).configuration.preferred_loader_version.map(|s| s.as_str()).unwrap_or("Latest");
@@ -64,9 +77,6 @@ impl InstanceSettingsSubpage {
                 });
             }
         }).detach();
-
-        let new_name_input_state = cx.new(|cx| InputState::new(window, cx));
-        cx.subscribe(&new_name_input_state, Self::on_new_name_input).detach();
 
         let loader_version_select_state = cx.new(|cx| {
             let mut select_state = SelectState::new(SearchableVec::new(vec![]), None, window, cx).searchable(true);
@@ -96,6 +106,8 @@ impl InstanceSettingsSubpage {
             instance: instance.clone(),
             instance_id,
             new_name_input_state,
+            version_state: TypelessFrontendMetadataResult::Loading,
+            version_select_state,
             loader,
             loader_version_select_state,
             memory_override_enabled: memory.enabled,
@@ -111,12 +123,63 @@ impl InstanceSettingsSubpage {
             _observe_loader_version_subscription: None,
             _select_file_task: Task::ready(())
         };
+        page.update_minecraft_versions(minecraft_versions, window, cx);
         page.update_loader_versions(window, cx);
         page
     }
 }
 
 impl InstanceSettingsSubpage {
+    fn update_minecraft_versions(&mut self, versions: Entity<FrontendMetadataState>, window: &mut Window, cx: &mut Context<Self>) {
+        let result: FrontendMetadataResult<MinecraftVersionManifest> = versions.read(cx).result();
+        let versions = match result {
+            FrontendMetadataResult::Loading => {
+                Vec::new()
+            },
+            FrontendMetadataResult::Error(_) => {
+                Vec::new()
+            },
+            FrontendMetadataResult::Loaded(manifest) => {
+                manifest.versions.iter().map(|v| SharedString::from(v.id.as_str())).collect()
+            },
+        };
+
+        let current_version = self.instance.read(cx).configuration.minecraft_version;
+
+        self.version_state = result.as_typeless();
+
+        self.version_select_state.update(cx, |dropdown, cx| {
+            let mut to_select = None;
+
+            if let Some(last_selected) = dropdown.selected_value().cloned()
+                && versions.contains(&last_selected)
+            {
+                to_select = Some(last_selected);
+            }
+
+            if to_select.is_none()
+                && versions.contains(&SharedString::new_static(current_version.as_str()))
+            {
+                to_select = Some(SharedString::new_static(current_version.as_str()));
+            }
+
+            dropdown.set_items(
+                VersionList {
+                    versions: versions.clone(),
+                    matched_versions: versions,
+                },
+                window,
+                cx,
+            );
+
+            if let Some(to_select) = to_select {
+                dropdown.set_selected_value(&to_select, window, cx);
+            }
+
+            cx.notify();
+        });
+    }
+
     fn update_loader_versions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let loader_versions = match self.loader {
             Loader::Vanilla | Loader::Unknown => {
@@ -215,6 +278,24 @@ impl InstanceSettingsSubpage {
 
             self.new_name_change_state = NewNameChangeState::Pending;
         }
+    }
+
+    pub fn on_minecraft_version_selected(
+        &mut self,
+        _state: Entity<SelectState<VersionList>>,
+        event: &SelectEvent<VersionList>,
+        _cx: &mut Context<Self>,
+    ) {
+        let SelectEvent::Confirm(value) = event;
+
+        let Some(value) = value else {
+            return;
+        };
+
+        self.backend_handle.send(MessageToBackend::SetInstanceMinecraftVersion {
+            id: self.instance_id,
+            version: value.as_str().into(),
+        });
     }
 
     pub fn on_loader_version_selected(
@@ -370,7 +451,27 @@ impl Render for InstanceSettingsSubpage {
                         }
                     })
                 )
-            )
+            );
+
+        match self.version_state {
+            TypelessFrontendMetadataResult::Loading => {
+                basic_content = basic_content.child(crate::labelled(
+                    "Version",
+                    Spinner::new()
+                ))
+            },
+            TypelessFrontendMetadataResult::Loaded => {
+                basic_content = basic_content.child(crate::labelled(
+                    "Version",
+                    Select::new(&self.version_select_state).w_full()
+                ))
+            },
+            TypelessFrontendMetadataResult::Error(ref error) => {
+                basic_content = basic_content.child(format!("Error loading minecraft versions: {}", error))
+            },
+        }
+
+        basic_content = basic_content
             .child(ButtonGroup::new("loader")
                 .outline()
                 .child(
