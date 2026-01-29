@@ -22,8 +22,10 @@ cargo packager --config '{'\
 '  "version": "'"$version"'",'\
 '  "identifier": "com.moulberry.pandoralauncher",'\
 '  "resources": [],'\
+'  "formats": ["nsis"],'\
 '  "binaries": [{ "path": "PandoraLauncher-Windows.exe", "main": true }],'\
 '  "icons": ["package/windows.ico"]'\
 '}'
 
 mv dist/PandoraLauncher-Windows.exe dist/PandoraLauncher-Windows-$version-x86_64.exe
+mv dist/pandora-launcher_*_x64-setup.exe dist/PandoraLauncher-Windows-${version}_x64-setup.exe

@@ -21,7 +21,7 @@ cargo install cargo-packager
 cargo packager --config '{'\
 '  "name": "pandora-launcher",'\
 '  "outDir": "./dist",'\
-'  "formats": ["dmg"],'\
+'  "formats": ["dmg", "app"],'\
 '  "productName": "Pandora Launcher",'\
 '  "version": "'"$version"'",'\
 '  "identifier": "com.moulberry.pandoralauncher",'\
@@ -31,3 +31,7 @@ cargo packager --config '{'\
 '}'
 
 mv dist/PandoraLauncher-macOS dist/PandoraLauncher-macOS-$version-Universal
+mv dist/pandora-launcher_*_universal.dmg dist/PandoraLauncher-macOS-${version}-Universal.dmg
+tar -czf dist/Pandora.Launcher.app.tar.gz -C dist/ "Pandora Launcher.app"
+
+

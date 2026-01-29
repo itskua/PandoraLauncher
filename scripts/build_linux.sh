@@ -27,3 +27,5 @@ cargo packager --config '{'\
 '}'
 
 mv dist/PandoraLauncher-Linux dist/PandoraLauncher-Linux-$version-x86_64
+mv dist/pandora-launcher_*_amd64.deb dist/PandoraLauncher-Linux-${version}_amd64.deb
+mv dist/pandora-launcher_*_x86_64.AppImage dist/PandoraLauncher-Linux-${version}_x86_64.AppImage
