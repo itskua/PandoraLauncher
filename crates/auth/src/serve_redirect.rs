@@ -36,8 +36,6 @@ pub async fn start_server(
 
     log::info!("Successfully started listening on {}", constants::SERVER_ADDRESS);
 
-    
-    let mut buf = vec![0_u8; 1024];
     let mut read;
 
     loop {
