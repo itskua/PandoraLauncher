@@ -7,11 +7,13 @@ fi
 
 version=${1#v}
 
-sudo apt-get update --yes && sudo apt-get install --yes libssl-dev libdbus-1-dev libx11-xcb1 libxkbcommon-x11-dev pkg-config
+sudo apt-get update --yes && sudo apt-get install --yes libssl-dev libdbus-1-dev libx11-xcb1 libxkbcommon-x11-dev pkg-config inkscape
 cargo build --release --target x86_64-unknown-linux-gnu
 strip target/x86_64-unknown-linux-gnu/release/pandora_launcher
 mkdir -p dist
 mv target/x86_64-unknown-linux-gnu/release/pandora_launcher dist/PandoraLauncher-Linux
+
+inkscape --export-filename="package/icon_512x512.png" --export-width=512 "package/windows.svg"
 
 cargo install cargo-packager
 cargo packager --config '{'\
@@ -23,7 +25,7 @@ cargo packager --config '{'\
 '  "identifier": "com.moulberry.pandoralauncher",'\
 '  "resources": [],'\
 '  "binaries": [{ "path": "PandoraLauncher-Linux", "main": true }],'\
-'  "icons": ["package/windows.ico"]'\
+'  "icons": ["package/icon_512x512.png"]'\
 '}'
 
 mv dist/PandoraLauncher-Linux dist/PandoraLauncher-Linux-$version-x86_64
