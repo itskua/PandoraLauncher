@@ -31,11 +31,11 @@ pub async fn start_server(
 ) -> Result<FinishedAuthorization, ProcessAuthorizationError> {
     log::info!("Starting auth redirect server on {}", constants::SERVER_ADDRESS);
 
-    let mut buf = [0_u8; 8192];
     let listener = tokio::net::TcpListener::bind(constants::SERVER_ADDRESS).await?;
 
     log::info!("Successfully started listening on {}", constants::SERVER_ADDRESS);
 
+    let mut buf = vec![0_u8; 1024];
     let mut read;
 
     loop {
