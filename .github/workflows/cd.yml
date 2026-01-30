@@ -14,18 +14,10 @@ jobs:
       fail-fast: true
       matrix:
         platform:
-          - os_name: Linux-x86_64
-            os: ubuntu-latest
-            targets: x86_64-unknown-linux-gnu
-            buildscript: ./scripts/build_linux.sh
           - os_name: Windows-x86_64
             os: windows-latest
             targets: x86_64-pc-windows-msvc
             buildscript: ./scripts/build_windows.sh
-          - os_name: MacOS-arm64
-            os: macos-latest
-            targets: aarch64-apple-darwin,x86_64-apple-darwin
-            buildscript: ./scripts/build_mac.sh
 
     runs-on: ${{ matrix.platform.os }}
     steps:
