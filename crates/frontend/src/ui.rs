@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bridge::{instance::InstanceID, message::MessageToBackend};
 use gpui::{prelude::*, *};
 use gpui_component::{
-    breadcrumb::{Breadcrumb, BreadcrumbItem}, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, resizable::{h_resizable, resizable_panel, ResizableState}, sidebar::{Sidebar, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem}, v_flex, ActiveTheme as _, Disableable, Icon, IconName, WindowExt
+    ActiveTheme as _, Disableable, Icon, IconName, WindowExt, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, resizable::{ResizableState, h_resizable, resizable_panel}, scroll::ScrollableElement, sidebar::SidebarFooter, v_flex
 };
 use rand::Rng;
 use schema::modrinth::ModrinthProjectType;
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    component::page_path::PagePath, entity::{
+    component::{menu::{MenuGroup, MenuGroupItem}, page_path::PagePath}, entity::{
         DataEntities, instance::{InstanceAddedEvent, InstanceEntries, InstanceModifiedEvent, InstanceMovedToTopEvent, InstanceRemovedEvent}
     }, interface_config::InterfaceConfig, modals, pages::{instance::instance_page::{InstancePage, InstanceSubpageType}, instances_page::InstancesPage, modrinth_page::ModrinthSearchPage, syncing_page::SyncingPage}, png_render_cache, root
 };
@@ -238,51 +238,49 @@ impl Render for LauncherUI {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let page_type = self.page.page_type();
 
-        let library_group = SidebarGroup::new("Library").child(
-            SidebarMenu::new().children([
-                SidebarMenuItem::new("Instances")
-                    .active(page_type == PageType::Instances)
-                    .on_click(cx.listener(|launcher, _, window, cx| {
-                        launcher.switch_page(PageType::Instances, &[], window, cx);
-                    })),
-                SidebarMenuItem::new("Syncing")
-                    .active(page_type == PageType::Syncing)
-                    .on_click(cx.listener(|launcher, _, window, cx| {
-                        launcher.switch_page(PageType::Syncing, &[], window, cx);
-                    })),
-            ]),
-        );
+        let library_group = MenuGroup::new("Play")
+            .child(MenuGroupItem::new("Instances")
+                .active(page_type == PageType::Instances)
+                .on_click(cx.listener(|launcher, _, window, cx| {
+                    launcher.switch_page(PageType::Instances, &[], window, cx);
+                })));
 
-        let launcher_group = SidebarGroup::new("Content").child(
-            SidebarMenu::new().children([SidebarMenuItem::new("Modrinth")
+        let launcher_group = MenuGroup::new("Content")
+            .child(MenuGroupItem::new("Modrinth")
                 .active(page_type == PageType::Modrinth { installing_for: None, project_type: None })
                 .on_click(cx.listener(|launcher, _, window, cx| {
                     launcher.switch_page(PageType::Modrinth { installing_for: None, project_type: None }, &[], window, cx);
-                }))]),
-        );
+                })))
+            .child(MenuGroupItem::new("Syncing")
+                .active(page_type == PageType::Syncing)
+                .on_click(cx.listener(|launcher, _, window, cx| {
+                    launcher.switch_page(PageType::Syncing, &[], window, cx);
+                })));
 
-        let mut groups: heapless::Vec<SidebarGroup<SidebarMenu>, 3> = heapless::Vec::new();
+        let mut groups: heapless::Vec<MenuGroup, 3> = heapless::Vec::new();
 
         let _ = groups.push(library_group);
         let _ = groups.push(launcher_group);
 
         if !self.recent_instances.is_empty() {
-            let recent_instances_group = SidebarGroup::new("Recent Instances").child(SidebarMenu::new().children(
-                self.recent_instances.iter().map(|(id, name)| {
-                    let name = name.clone();
-                    let id = *id;
-                    let active = if let PageType::InstancePage(page_id, _) = page_type {
-                        page_id == id
-                    } else {
-                        false
-                    };
-                    SidebarMenuItem::new(name)
-                        .active(active)
-                        .on_click(cx.listener(move |launcher, _, window, cx| {
-                            launcher.switch_page(PageType::InstancePage(id, InstanceSubpageType::Quickplay), &[PageType::Instances], window, cx);
-                        }))
-                }),
-            ));
+            let mut recent_instances_group = MenuGroup::new("Recent Instances");
+
+            for (id, name) in &self.recent_instances {
+                let name = name.clone();
+                let id = *id;
+                let active = if let PageType::InstancePage(page_id, _) = page_type {
+                    page_id == id
+                } else {
+                    false
+                };
+                let item = MenuGroupItem::new(name)
+                    .active(active)
+                    .on_click(cx.listener(move |launcher, _, window, cx| {
+                        launcher.switch_page(PageType::InstancePage(id, InstanceSubpageType::Quickplay), &[PageType::Instances], window, cx);
+                    }));
+                recent_instances_group = recent_instances_group.child(item);
+            }
+
             let _ = groups.push(recent_instances_group);
         }
 
@@ -305,7 +303,7 @@ impl Render for LauncherUI {
 
         let pandora_icon = Icon::empty().path("icons/pandora.svg");
 
-        let footer = div().flex_grow().id("footer-button").child(SidebarFooter::new()
+        let account_button = div().flex_grow().id("account-button").child(SidebarFooter::new()
             .w_full()
             .justify_center()
             .text_size(rems(0.9375))
@@ -463,21 +461,30 @@ impl Render for LauncherUI {
                 }
             });
 
-        let sidebar = Sidebar::left()
-            .w(relative(1.))
-            .border_0()
-            .header(
-                h_flex()
-                    .p_2()
-                    .gap_2()
-                    .w_full()
-                    .justify_center()
-                    .text_size(rems(0.9375))
-                    .child(pandora_icon.size_8().min_w_8().min_h_8())
-                    .child("Pandora"),
-            )
-            .footer(h_flex().flex_wrap().justify_center().w_full().child(settings_button).child(footer))
-            .children(groups);
+        let header = h_flex()
+            .pt_5()
+            .px_5()
+            .pb_2()
+            .gap_2()
+            .w_full()
+            .justify_center()
+            .text_size(rems(0.9375))
+            .child(pandora_icon.size_8().min_w_8().min_h_8())
+            .child("Pandora");
+        let footer = h_flex().pb_3().px_3().flex_wrap().justify_center().w_full().child(settings_button).child(account_button);
+        let sidebar = v_flex()
+            .w_full()
+            .bg(cx.theme().sidebar)
+            .text_color(cx.theme().sidebar_foreground)
+            .child(header)
+            .child(v_flex()
+                .flex_1()
+                .min_h_0()
+                .px_3()
+                .gap_y_3()
+                .children(groups)
+                .overflow_y_scrollbar())
+            .child(footer);
 
         h_resizable("container")
             .with_state(&self.sidebar_state)
