@@ -651,7 +651,7 @@ impl Render for InstanceSettingsSubpage {
                                             let this_entity = this_entity.clone();
                                             let path_clone = path_clone.clone();
                                             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-                                                _ = cx.update_window_entity(&this_entity, move |this, _, cx| {
+                                                _ = cx.update_entity(&this_entity, move |this: &mut InstanceSettingsSubpage, _, cx| {
                                                      this.jvm_binary_path = Some(Path::new(path_clone.as_ref()).into());
                                                      this.backend_handle.send(MessageToBackend::SetInstanceJvmBinary {
                                                          id: this.instance_id,
