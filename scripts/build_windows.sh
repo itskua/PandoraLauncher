@@ -28,4 +28,4 @@ cargo packager --config '{'\
 '}'
 
 mv dist/PandoraLauncher-Windows.exe dist/PandoraLauncher-Windows-$version-x86_64.exe
-mv dist/pandora-launcher_*_x64-setup.exe dist/PandoraLauncher-Windows-${version}_x64-setup.exe
+mv dist/*_x64-setup.exe dist/PandoraLauncher-Windows-${version}_x64-setup.exe
