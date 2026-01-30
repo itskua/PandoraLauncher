@@ -2,9 +2,11 @@ use std::{path::Path, sync::{
     atomic::Ordering, Arc
 }};
 
+use bridge::{
     handle::BackendHandle, install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::InstanceID, message::{AtomicBridgeDataLoadState, MessageToBackend}, serial::AtomicOptionSerial
 };
 use gpui::{prelude::*, *};
+use gpui_component::{
     ActiveTheme as _, Sizable, WindowExt, button::Button, h_flex, input::SelectAll, list::ListState, notification::{Notification, NotificationType}, v_flex
 };
 
