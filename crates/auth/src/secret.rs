@@ -68,7 +68,7 @@ mod inner {
             keyring.unlock().await?;
 
             let uuid_str = uuid.as_hyphenated().to_string();
-            let attributes = vec![("service", "pandora-launcher"), ("uuid", uuid_str.as_str())];
+            let attributes = vec![("service", "lumina-forge-launcher"), ("uuid", uuid_str.as_str())];
 
             let items = keyring.search_items(&attributes).await?;
 
@@ -91,11 +91,11 @@ mod inner {
             keyring.unlock().await?;
 
             let uuid_str = uuid.as_hyphenated().to_string();
-            let attributes = vec![("service", "pandora-launcher"), ("uuid", uuid_str.as_str())];
+            let attributes = vec![("service", "lumina-forge-launcher"), ("uuid", uuid_str.as_str())];
 
             let bytes = serde_json::to_vec(credentials).map_err(|_| SecretStorageError::SerializationError)?;
 
-            keyring.create_item("Pandora Minecraft Account", &attributes, bytes, true).await?;
+            keyring.create_item("LuminaForge Minecraft Account", &attributes, bytes, true).await?;
             Ok(())
         }
 
@@ -104,7 +104,7 @@ mod inner {
             keyring.unlock().await?;
 
             let uuid_str = uuid.as_hyphenated().to_string();
-            let attributes = vec![("service", "pandora-launcher"), ("uuid", uuid_str.as_str())];
+            let attributes = vec![("service", "lumina-forge-launcher"), ("uuid", uuid_str.as_str())];
 
             keyring.delete(&attributes).await?;
             Ok(())
@@ -128,7 +128,7 @@ mod inner {
         }
 
         pub async fn read_credentials(&self, uuid: Uuid) -> Result<Option<AccountCredentials>, SecretStorageError> {
-            let target_name = format!("PandoraLauncher_MinecraftAccount_{}", uuid.as_hyphenated());
+            let target_name = format!("LuminaForgeLauncher_MinecraftAccount_{}", uuid.as_hyphenated());
 
             fn read<T: for<'a> serde::Deserialize<'a>>(target: String) -> Result<Option<T>, SecretStorageError> {
                 let mut target_name: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
@@ -165,11 +165,11 @@ mod inner {
             let mut account = AccountCredentials::default();
 
             let uuid = uuid.as_hyphenated();
-            account.msa_refresh = read(format!("PandoraLauncher_MsaRefresh_{}", uuid))?;
-            account.msa_access = read(format!("PandoraLauncher_MsaAccess_{}", uuid))?;
-            account.xbl = read(format!("PandoraLauncher_Xbl_{}", uuid))?;
-            account.xsts = read(format!("PandoraLauncher_Xsts_{}", uuid))?;
-            account.access_token = read(format!("PandoraLauncher_AccessToken_{}", uuid))?;
+            account.msa_refresh = read(format!("LuminaForgeLauncher_MsaRefresh_{}", uuid))?;
+            account.msa_access = read(format!("LuminaForgeLauncher_MsaAccess_{}", uuid))?;
+            account.xbl = read(format!("LuminaForgeLauncher_Xbl_{}", uuid))?;
+            account.xsts = read(format!("LuminaForgeLauncher_Xsts_{}", uuid))?;
+            account.access_token = read(format!("LuminaForgeLauncher_AccessToken_{}", uuid))?;
 
             Ok(Some(account))
         }
@@ -213,11 +213,11 @@ mod inner {
             }
 
             let uuid = uuid.as_hyphenated();
-            write(format!("PandoraLauncher_MsaRefresh_{}", uuid), credentials.msa_refresh.as_ref())?;
-            write(format!("PandoraLauncher_MsaAccess_{}", uuid), credentials.msa_access.as_ref())?;
-            write(format!("PandoraLauncher_Xbl_{}", uuid), credentials.xbl.as_ref())?;
-            write(format!("PandoraLauncher_Xsts_{}", uuid), credentials.xsts.as_ref())?;
-            write(format!("PandoraLauncher_AccessToken_{}", uuid), credentials.access_token.as_ref())?;
+            write(format!("LuminaForgeLauncher_MsaRefresh_{}", uuid), credentials.msa_refresh.as_ref())?;
+            write(format!("LuminaForgeLauncher_MsaAccess_{}", uuid), credentials.msa_access.as_ref())?;
+            write(format!("LuminaForgeLauncher_Xbl_{}", uuid), credentials.xbl.as_ref())?;
+            write(format!("LuminaForgeLauncher_Xsts_{}", uuid), credentials.xsts.as_ref())?;
+            write(format!("LuminaForgeLauncher_AccessToken_{}", uuid), credentials.access_token.as_ref())?;
 
             Ok(())
         }
@@ -232,11 +232,11 @@ mod inner {
             }
 
             [
-                delete(format!("PandoraLauncher_MsaRefresh_{}", uuid)),
-                delete(format!("PandoraLauncher_MsaAccess_{}", uuid)),
-                delete(format!("PandoraLauncher_Xbl_{}", uuid)),
-                delete(format!("PandoraLauncher_Xsts_{}", uuid)),
-                delete(format!("PandoraLauncher_AccessToken_{}", uuid)),
+                delete(format!("LuminaForgeLauncher_MsaRefresh_{}", uuid)),
+                delete(format!("LuminaForgeLauncher_MsaAccess_{}", uuid)),
+                delete(format!("LuminaForgeLauncher_Xbl_{}", uuid)),
+                delete(format!("LuminaForgeLauncher_Xsts_{}", uuid)),
+                delete(format!("LuminaForgeLauncher_AccessToken_{}", uuid)),
             ].into_iter().collect::<Result<(), _>>()?;
 
             Ok(())
@@ -264,7 +264,7 @@ mod inner {
 
         pub async fn read_credentials(&self, uuid: Uuid) -> Result<Option<AccountCredentials>, SecretStorageError> {
             let uuid_str = uuid.as_hyphenated().to_string();
-            let data = match self.keychain.find_generic_password("com.moulberry.pandoralauncher", uuid_str.as_str()) {
+            let data = match self.keychain.find_generic_password("com.moulberry.luminaforgelauncher", uuid_str.as_str()) {
                 Ok((data, _)) => data,
                 Err(error) if error.code() == security_framework_sys::base::errSecItemNotFound => {
                     return Ok(None);
@@ -285,14 +285,14 @@ mod inner {
             let uuid_str = uuid.as_hyphenated().to_string();
             let bytes = serde_json::to_vec(credentials).map_err(|_| SecretStorageError::SerializationError)?;
 
-            self.keychain.set_generic_password("com.moulberry.pandoralauncher", uuid_str.as_str(), &bytes)?;
+            self.keychain.set_generic_password("com.moulberry.luminaforgelauncher", uuid_str.as_str(), &bytes)?;
             Ok(())
         }
 
         pub async fn delete_credentials(&self, uuid: Uuid) -> Result<(), SecretStorageError> {
             let uuid_str = uuid.as_hyphenated().to_string();
 
-            let item = match self.keychain.find_generic_password("com.moulberry.pandoralauncher", uuid_str.as_str()) {
+            let item = match self.keychain.find_generic_password("com.moulberry.luminaforgelauncher", uuid_str.as_str()) {
                 Ok((_, item)) => item,
                 Err(error) if error.code() == security_framework_sys::base::errSecItemNotFound => {
                     return Ok(());

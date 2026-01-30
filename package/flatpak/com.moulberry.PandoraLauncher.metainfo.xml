@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <!--Created with jdAppStreamEdit 9.2-->
   <id>com.moulberry.PandoraLauncher</id>
-  <name>Pandora Launcher</name>
+  <name>LuminaForge Launcher</name>
   <summary>A balanced, easy to use, and powerful modern Minecraft launcher</summary>
   <developer id="com.moulberry">
     <name>Moulberry</name>
@@ -10,7 +10,7 @@
   <metadata_license>FSFAP</metadata_license>
   <project_license>MIT</project_license>
   <description>
-    <p>Pandora is a modern Minecraft launcher that balances ease-of-use with powerful instance management features.</p>
+    <p>LuminaForge Launcher is a modern Minecraft launcher that balances ease-of-use with powerful instance management features.</p>
   </description>
   <screenshots>
     <screenshot type="default">

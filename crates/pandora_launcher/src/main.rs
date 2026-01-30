@@ -29,7 +29,7 @@ fn main() {
 
     let base_dirs = directories::BaseDirs::new().unwrap();
     let data_dir = base_dirs.data_dir();
-    let launcher_dir = data_dir.join("PandoraLauncher");
+    let launcher_dir = data_dir.join("LuminaForgeLauncher");
 
     _ = std::env::set_current_dir(&launcher_dir);
 

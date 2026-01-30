@@ -74,7 +74,7 @@ impl Render for LauncherRoot {
             .size_full()
             .font_family(MAIN_FONT)
             .when(has_csd_titlebar(window), |this| {
-                this.child(gpui_component::TitleBar::new().child("Pandora"))
+                this.child(gpui_component::TitleBar::new().child("LuminaForge Launcher"))
             })
             .child(self.ui.clone())
             .children(sheet_layer)
