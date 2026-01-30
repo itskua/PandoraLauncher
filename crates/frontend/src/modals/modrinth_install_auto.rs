@@ -2,15 +2,13 @@ use std::sync::Arc;
 
 use bridge::{install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::InstanceID, message::MessageToBackend, meta::MetadataRequest, modal_action::ModalAction, safe_path::SafePath};
 
-use gpui::{prelude::*, *};
-use gpui_component::{
-    notification::Notification, spinner::Spinner, h_flex
-};
+use gpui::{prelude::*, App, AsyncWindowContext, Model, ViewContext, *};
+use gpui_component::{modal::Modal, notification::Notification, spinner::Spinner, h_flex, WindowExt};
 use relative_path::RelativePath;
 
 use schema::{
-    modrinth::{
-        ModrinthDependencyType, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionType
+    content::ContentSource, modrinth::{
+        ModrinthDependencyType, ModrinthProjectType, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionType
     }
 };
 use uuid::Uuid;

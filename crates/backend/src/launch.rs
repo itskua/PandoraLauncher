@@ -2061,7 +2061,7 @@ pub struct LaunchContext {
     pub game_dir: Arc<Path>,
     pub configuration: InstanceConfiguration,
     pub assets_root: Arc<Path>,
-    pub _temp_dir: Arc<Path>,
+    pub temp_dir: Arc<Path>,
     pub assets_index_name: String,
     pub classpath: Vec<OsString>,
     pub log_configuration: Option<OsString>,

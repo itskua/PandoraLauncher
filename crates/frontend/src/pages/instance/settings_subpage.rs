@@ -647,12 +647,12 @@ impl Render for InstanceSettingsSubpage {
                                     let mut content = v_flex().gap_2();
                                     for path in items {
                                         let path_clone = path.clone();
-                                        content = content.child(Button::new(path.clone()).label(path.clone()).on_click(cx.listener({
+                                        content = content.child(Button::new(path.clone()).label(path.clone()).on_click({
                                             let this_entity = this_entity.clone();
                                             let path_clone = path_clone.clone();
-                                            move |_, _, window, cx| {
+                                            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
                                                 _ = cx.update_window_entity(&this_entity, move |this, _, cx| {
-                                                     this.jvm_binary_path = Some(Path::new(&*path_clone).into());
+                                                     this.jvm_binary_path = Some(Path::new(path_clone.as_ref()).into());
                                                      this.backend_handle.send(MessageToBackend::SetInstanceJvmBinary {
                                                          id: this.instance_id,
                                                          jvm_binary: this.get_jvm_binary_configuration()
@@ -661,7 +661,7 @@ impl Render for InstanceSettingsSubpage {
                                                 });
                                                 window.close_dialog(cx);
                                             }
-                                        })));
+                                        }));
                                     }
                                     dialog.title("Select Java Version").child(content)
                                });

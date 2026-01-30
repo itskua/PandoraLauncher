@@ -7,7 +7,7 @@ use bridge::{
 };
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Sizable, WindowExt, button::Button, h_flex, input::SelectAll, list::ListState, notification::{Notification, NotificationType}, v_flex
+    ActiveTheme as _, Sizable, WindowExt, button::{Button, ButtonVariants}, h_flex, input::SelectAll, list::ListState, notification::{Notification, NotificationType}, v_flex
 };
 
 use schema::{content::ContentSource, loader::Loader, modrinth::ModrinthProjectType};

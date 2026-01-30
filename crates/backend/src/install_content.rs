@@ -42,7 +42,7 @@ struct InstallFromContentLibrary {
     hash: [u8; 20],
     install_path: Arc<Path>,
     content_file: ContentInstallFile,
-    _mod_summary: Option<Arc<ContentSummary>>,
+    mod_summary: Option<Arc<ContentSummary>>,
 }
 
 #[derive(Clone)]
