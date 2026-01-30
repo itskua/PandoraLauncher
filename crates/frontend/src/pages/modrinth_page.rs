@@ -210,7 +210,10 @@ impl ModrinthSearchPage {
 
         let mut facets = format!("[[\"project_type={}\"]", project_type);
 
-        let is_mod = self.filter_project_type == ModrinthProjectType::Mod || self.filter_project_type == ModrinthProjectType::Modpack;
+        let is_mod = self.filter_project_type == ModrinthProjectType::Mod ||
+             self.filter_project_type == ModrinthProjectType::Modpack ||
+             self.filter_project_type == ModrinthProjectType::Shader ||
+             self.filter_project_type == ModrinthProjectType::Resourcepack;
         if !self.filter_loaders.is_empty() && is_mod {
             facets.push_str(",[");
 
@@ -717,7 +720,10 @@ impl Render for ModrinthSearchPage {
                 _ => {},
             }));
 
-        let loader_button_group = if self.filter_project_type == ModrinthProjectType::Mod || self.filter_project_type == ModrinthProjectType::Modpack {
+        let loader_button_group = if self.filter_project_type == ModrinthProjectType::Mod ||
+             self.filter_project_type == ModrinthProjectType::Modpack ||
+             self.filter_project_type == ModrinthProjectType::Shader ||
+             self.filter_project_type == ModrinthProjectType::Resourcepack {
             Some(ButtonGroup::new("loader_group")
                 .layout(Axis::Vertical)
                 .outline()

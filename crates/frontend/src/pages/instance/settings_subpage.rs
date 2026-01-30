@@ -39,6 +39,7 @@ pub struct InstanceSettingsSubpage {
     backend_handle: BackendHandle,
     _observe_loader_version_subscription: Option<Subscription>,
     _select_file_task: Task<()>,
+    _detect_java_task: Task<()>,
 }
 
 impl InstanceSettingsSubpage {
@@ -121,7 +122,8 @@ impl InstanceSettingsSubpage {
             backend_handle,
             loader_versions_state: TypelessFrontendMetadataResult::Loading,
             _observe_loader_version_subscription: None,
-            _select_file_task: Task::ready(())
+            _select_file_task: Task::ready(()),
+            _detect_java_task: Task::ready(()),
         };
         page.update_minecraft_versions(minecraft_versions, window, cx);
         page.update_loader_versions(window, cx);
@@ -623,6 +625,49 @@ impl Render for InstanceSettingsSubpage {
                         });
                     });
                     this._select_file_task = add_from_file_task;
+                })))
+                .child(Button::new("auto_detect_jvm").label("Auto Detect").disabled(!jvm_binary_enabled).on_click(cx.listener(|this, _, window, cx| {
+                    let backend_handle = this.backend_handle.clone();
+                    let this_entity = cx.entity();
+                    
+                    this._detect_java_task = window.spawn(cx, async move |cx| {
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        backend_handle.send(MessageToBackend::DetectJavaInstallations { channel: tx });
+                        
+                        if let Ok(paths) = rx.await {
+                           _ = cx.update_window_entity(&this_entity, move |this, window, cx| {
+                               if paths.is_empty() {
+                                   window.push_notification((NotificationType::Info, "No Java installations found"), cx);
+                                   return;
+                               }
+                               
+                               let items: Vec<SharedString> = paths.iter().map(|p| SharedString::new(p.to_string_lossy())).collect();
+
+                               window.open_dialog(cx, move |dialog, _, cx| {
+                                    let mut content = v_flex().gap_2();
+                                    for path in items {
+                                        let path_clone = path.clone();
+                                        content = content.child(Button::new(path.clone()).label(path.clone()).on_click(cx.listener({
+                                            let this_entity = this_entity.clone();
+                                            let path_clone = path_clone.clone();
+                                            move |_, _, window, cx| {
+                                                _ = cx.update_window_entity(&this_entity, move |this, _, cx| {
+                                                     this.jvm_binary_path = Some(Path::new(&*path_clone).into());
+                                                     this.backend_handle.send(MessageToBackend::SetInstanceJvmBinary {
+                                                         id: this.instance_id,
+                                                         jvm_binary: this.get_jvm_binary_configuration()
+                                                     });
+                                                     cx.notify();
+                                                });
+                                                window.close_dialog(cx);
+                                            }
+                                        })));
+                                    }
+                                    dialog.title("Select Java Version").child(content)
+                               });
+                           });
+                        }
+                    });
                 })))
             );
 

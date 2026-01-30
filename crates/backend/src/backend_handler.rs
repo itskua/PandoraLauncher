@@ -787,6 +787,10 @@ impl BackendState {
                 let configuration = self.config.write().get().clone();
                 _ = channel.send(configuration);
             },
+            MessageToBackend::DetectJavaInstallations { channel } => {
+                let installations = crate::java_scanner::scan_java_installations().await;
+                _ = channel.send(installations);
+            },
             MessageToBackend::CleanupOldLogFiles { instance: id } => {
                 let mut deleted = 0;
 

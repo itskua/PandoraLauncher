@@ -117,6 +117,9 @@ pub enum MessageToBackend {
     GetBackendConfiguration {
         channel: tokio::sync::oneshot::Sender<BackendConfig>,
     },
+    DetectJavaInstallations {
+        channel: tokio::sync::oneshot::Sender<Vec<PathBuf>>,
+    },
     SetSyncing {
         target: SyncTarget,
         value: bool,

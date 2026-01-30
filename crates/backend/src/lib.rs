@@ -28,6 +28,8 @@ mod persistent;
 mod shortcut;
 mod syncing;
 
+pub mod java_scanner;
+
 pub(crate) fn is_single_component_path(path: &str) -> bool {
     let path = std::path::Path::new(path);
     let mut components = path.components().peekable();
