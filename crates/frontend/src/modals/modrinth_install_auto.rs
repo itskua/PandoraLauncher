@@ -1,26 +1,22 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::sync::Arc;
 
 use bridge::{install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::InstanceID, message::MessageToBackend, meta::MetadataRequest, modal_action::ModalAction, safe_path::SafePath};
-use enumset::EnumSet;
+
 use gpui::{prelude::*, *};
 use gpui_component::{
-    button::{Button, ButtonVariants}, checkbox::Checkbox, dialog::Dialog, h_flex, notification::{Notification, NotificationType}, select::{SearchableVec, Select, SelectItem, SelectState}, spinner::Spinner, v_flex, IndexPath, WindowExt
+    notification::Notification, spinner::Spinner, h_flex
 };
 use relative_path::RelativePath;
-use rustc_hash::FxHashMap;
+
 use schema::{
-    content::ContentSource, loader::Loader, modrinth::{
-        ModrinthDependency, ModrinthDependencyType, ModrinthLoader, ModrinthProjectType, ModrinthProjectVersion, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionStatus, ModrinthVersionType
+    modrinth::{
+        ModrinthDependencyType, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionType
     }
 };
 use uuid::Uuid;
 
-use crate::{
-    component::{error_alert::ErrorAlert, instance_dropdown::InstanceDropdown},
-    entity::{
-        instance::InstanceEntry, metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult, FrontendMetadataState}, DataEntities
-    },
-    root,
+use crate::entity::{
+    metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult, FrontendMetadataState}, DataEntities
 };
 
 // struct VersionMatrixLoaders {

@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::{Path, PathBuf}, sync::Arc};
 
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSet;
 use schema::{backend_config::{BackendConfig, SyncTarget}, instance::{InstanceConfiguration, InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader};
 use ustr::Ustr;
 use uuid::Uuid;

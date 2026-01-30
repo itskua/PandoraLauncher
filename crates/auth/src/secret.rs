@@ -128,7 +128,7 @@ mod inner {
         }
 
         pub async fn read_credentials(&self, uuid: Uuid) -> Result<Option<AccountCredentials>, SecretStorageError> {
-            let target_name = format!("LuminaForgeLauncher_MinecraftAccount_{}", uuid.as_hyphenated());
+
 
             fn read<T: for<'a> serde::Deserialize<'a>>(target: String) -> Result<Option<T>, SecretStorageError> {
                 let mut target_name: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();

@@ -8,7 +8,7 @@ use bridge::{
     modal_action::ModalAction,
 };
 use gpui::{prelude::*, *};
-use gpui_component::{breadcrumb::Breadcrumb, scroll::{ScrollableElement, ScrollbarAxis}, v_flex, Root, StyledExt};
+use gpui_component::{scroll::ScrollableElement, v_flex, Root};
 use parking_lot::RwLock;
 
 use crate::{entity::DataEntities, modals, ui::{LauncherUI, PageType}, CloseWindow, MAIN_FONT};
