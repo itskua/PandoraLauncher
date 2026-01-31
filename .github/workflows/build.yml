@@ -30,8 +30,6 @@ jobs:
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Install needed packages on Linux
         if: contains(matrix.platform.os, 'ubuntu')

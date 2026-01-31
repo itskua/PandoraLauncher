@@ -30,8 +30,6 @@ jobs:
           targets: ${{ matrix.platform.targets }}
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Install mold linker
         uses: rui314/setup-mold@v1
