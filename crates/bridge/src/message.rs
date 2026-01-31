@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::{Path, PathBuf}, sync::Arc};
 
-use enumset::EnumSet;
+use enumset::{EnumSet, EnumSetType};
 use schema::{backend_config::{BackendConfig, SyncTarget}, instance::{InstanceConfiguration, InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader};
 use ustr::Ustr;
 use uuid::Uuid;
@@ -116,9 +116,6 @@ pub enum MessageToBackend {
     },
     GetBackendConfiguration {
         channel: tokio::sync::oneshot::Sender<BackendConfig>,
-    },
-    DetectJavaInstallations {
-        channel: tokio::sync::oneshot::Sender<Vec<PathBuf>>,
     },
     SetSyncing {
         target: SyncTarget,

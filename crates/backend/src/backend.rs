@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, io::Cursor, path::{Path, PathBuf}, sync::Arc, time::{Duration, SystemTime}
+    collections::{HashMap, HashSet}, io::Cursor, path::{Path, PathBuf}, sync::Arc, time::{Duration, SystemTime}
 };
 
 use auth::{
@@ -38,13 +38,13 @@ pub fn start(launcher_dir: PathBuf, send: FrontendHandle, self_handle: BackendHa
         .read_timeout(Duration::from_secs(15))
         .redirect(Policy::none())
         .use_rustls_tls()
-        .user_agent("LuminaForgeLauncher/0.1.0 (https://github.com/Moulberry/PandoraLauncher)")
+        .user_agent("PandoraLauncher/0.1.0 (https://github.com/Moulberry/PandoraLauncher)")
         .build()
         .unwrap();
 
     let redirecting_http_client = reqwest::ClientBuilder::new()
         .use_rustls_tls()
-        .user_agent("LuminaForgeLauncher/0.1.0 (https://github.com/Moulberry/PandoraLauncher)")
+        .user_agent("PandoraLauncher/0.1.0 (https://github.com/Moulberry/PandoraLauncher)")
         .build()
         .unwrap();
 
@@ -681,7 +681,7 @@ impl BackendState {
                     continue;
                 };
                 let file_name = entry.file_name();
-                if file_name.to_string_lossy().starts_with(".lumina.") {
+                if file_name.to_string_lossy().starts_with(".pandora.") {
                     log::trace!("Removing temporary mod file {:?}", &file_name);
                     _ = std::fs::remove_file(entry.path());
                 }
@@ -768,7 +768,7 @@ impl BackendState {
                     if loader_supports_add_mods {
                         add_mods.push(path);
                     } else if let Some(filename) = dest_path.file_name() {
-                        let filename = format!(".lumina.{filename}");
+                        let filename = format!(".pandora.{filename}");
                         let hidden_dest_path = mod_dir.join(filename);
                         let _ = std::fs::hard_link(path, hidden_dest_path);
                     }

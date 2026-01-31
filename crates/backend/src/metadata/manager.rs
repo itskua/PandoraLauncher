@@ -5,7 +5,7 @@ use std::{
 use bridge::keep_alive::{KeepAlive, KeepAliveHandle};
 use reqwest::StatusCode;
 use schema::{
-    assets_index::AssetsIndex, fabric_launch::FabricLaunch, fabric_loader_manifest::FabricLoaderManifest, forge::{ForgeMavenManifest, NeoforgeMavenManifest}, java_runtime_component::JavaRuntimeComponentManifest, java_runtimes::JavaRuntimes, modrinth::{ModrinthProjectVersion, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthSearchRequest, ModrinthSearchResult, ModrinthVersionFileUpdateResult}, version::MinecraftVersion, version_manifest::MinecraftVersionManifest
+    assets_index::AssetsIndex, fabric_launch::FabricLaunch, fabric_loader_manifest::FabricLoaderManifest, forge::{ForgeMavenManifest, NeoforgeMavenManifest}, java_runtime_component::JavaRuntimeComponentManifest, java_runtimes::JavaRuntimes, maven::MavenMetadataXml, modrinth::{ModrinthProjectVersion, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthSearchRequest, ModrinthSearchResult, ModrinthVersionFileUpdateResult}, version::MinecraftVersion, version_manifest::MinecraftVersionManifest
 };
 use serde::Deserialize;
 use sha1::{Digest, Sha1};

@@ -1,20 +1,26 @@
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
 use bridge::{install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::InstanceID, message::MessageToBackend, meta::MetadataRequest, modal_action::ModalAction, safe_path::SafePath};
-
+use enumset::EnumSet;
 use gpui::{prelude::*, *};
-use gpui_component::{modal::Modal, notification::Notification, spinner::Spinner, h_flex, WindowExt};
+use gpui_component::{
+    button::{Button, ButtonVariants}, checkbox::Checkbox, dialog::Dialog, h_flex, notification::{Notification, NotificationType}, select::{SearchableVec, Select, SelectItem, SelectState}, spinner::Spinner, v_flex, IndexPath, WindowExt
+};
 use relative_path::RelativePath;
-
+use rustc_hash::FxHashMap;
 use schema::{
-    content::ContentSource, modrinth::{
-        ModrinthDependencyType, ModrinthProjectType, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionType
+    content::ContentSource, loader::Loader, modrinth::{
+        ModrinthDependency, ModrinthDependencyType, ModrinthLoader, ModrinthProjectType, ModrinthProjectVersion, ModrinthProjectVersionsRequest, ModrinthProjectVersionsResult, ModrinthVersionStatus, ModrinthVersionType
     }
 };
 use uuid::Uuid;
 
-use crate::entity::{
-    metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult, FrontendMetadataState}, DataEntities
+use crate::{
+    component::{error_alert::ErrorAlert, instance_dropdown::InstanceDropdown},
+    entity::{
+        instance::InstanceEntry, metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult, FrontendMetadataState}, DataEntities
+    },
+    root,
 };
 
 // struct VersionMatrixLoaders {

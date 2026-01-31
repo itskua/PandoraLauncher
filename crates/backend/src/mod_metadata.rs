@@ -375,7 +375,7 @@ impl ModMetadataManager {
         }))
     }
 
-    fn load_jarjar<R: rc_zip_sync::HasCursor>(self: &Arc<Self>, _hash: [u8; 20], archive: &rc_zip_sync::ArchiveHandle<R>, file: EntryHandle<'_, R>) -> Option<Arc<ContentSummary>> {
+    fn load_jarjar<R: rc_zip_sync::HasCursor>(self: &Arc<Self>, hash: [u8; 20], archive: &rc_zip_sync::ArchiveHandle<R>, file: EntryHandle<'_, R>) -> Option<Arc<ContentSummary>> {
         let bytes = file.bytes().ok()?;
 
         let metadata_json: JarJarMetadata = serde_json::from_slice(&bytes).inspect_err(|e| {
@@ -399,7 +399,7 @@ impl ModMetadataManager {
         None
     }
 
-    fn load_from_java_manifest<R: rc_zip_sync::HasCursor>(self: &Arc<Self>, hash: [u8; 20], _archive: &rc_zip_sync::ArchiveHandle<R>, file: EntryHandle<'_, R>) -> Option<Arc<ContentSummary>> {
+    fn load_from_java_manifest<R: rc_zip_sync::HasCursor>(self: &Arc<Self>, hash: [u8; 20], archive: &rc_zip_sync::ArchiveHandle<R>, file: EntryHandle<'_, R>) -> Option<Arc<ContentSummary>> {
         let bytes = file.bytes().ok()?;
 
         let manifest_str = str::from_utf8(&bytes).ok()?;

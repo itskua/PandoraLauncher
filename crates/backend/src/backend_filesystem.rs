@@ -1,9 +1,9 @@
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use bridge::{instance::InstanceID, message::MessageToFrontend};
 use notify::{
     EventKind,
-    event::{DataChange, ModifyKind, RenameMode},
+    event::{CreateKind, DataChange, ModifyKind, RemoveKind, RenameMode},
 };
 use rustc_hash::FxHashSet;
 use strum::IntoEnumIterator;

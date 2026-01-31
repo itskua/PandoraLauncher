@@ -109,7 +109,7 @@ impl Settings {
 }
 
 impl Render for Settings {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let interface_config = InterfaceConfig::get(cx);
 
         let mut div = v_flex()

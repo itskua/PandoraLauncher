@@ -1,9 +1,9 @@
 use std::{ops::Range, sync::{atomic::AtomicBool, Arc}, time::Duration};
 
-use bridge::{instance::{AtomicContentUpdateStatus, ContentUpdateStatus, InstanceID, InstanceContentID}, message::MessageToBackend, meta::MetadataRequest, modal_action::ModalAction};
+use bridge::{instance::{AtomicContentUpdateStatus, ContentUpdateStatus, InstanceID, InstanceContentID, InstanceContentSummary}, message::MessageToBackend, meta::MetadataRequest, modal_action::ModalAction};
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Selectable, StyledExt, WindowExt, button::{Button, ButtonGroup, ButtonVariant, ButtonVariants}, checkbox::Checkbox, h_flex, input::{Input, InputEvent, InputState}, notification::NotificationType, scroll::Scrollbar, skeleton::Skeleton, tooltip::Tooltip, v_flex
+    ActiveTheme, Icon, IconName, Selectable, StyledExt, WindowExt, breadcrumb::Breadcrumb, button::{Button, ButtonGroup, ButtonVariant, ButtonVariants}, checkbox::Checkbox, h_flex, input::{Input, InputEvent, InputState}, notification::NotificationType, scroll::{ScrollableElement, Scrollbar}, skeleton::Skeleton, tooltip::Tooltip, v_flex
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use schema::{content::ContentSource, loader::Loader, modrinth::{
@@ -12,7 +12,7 @@ use schema::{content::ContentSource, loader::Loader, modrinth::{
 
 use crate::{
     component::{error_alert::ErrorAlert, page_path::PagePath}, entity::{
-        DataEntities, metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult}
+        DataEntities, instance::InstanceEntries, metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult}
     }, interface_config::InterfaceConfig, ts, ui
 };
 
@@ -210,10 +210,7 @@ impl ModrinthSearchPage {
 
         let mut facets = format!("[[\"project_type={}\"]", project_type);
 
-        let is_mod = self.filter_project_type == ModrinthProjectType::Mod ||
-             self.filter_project_type == ModrinthProjectType::Modpack ||
-             self.filter_project_type == ModrinthProjectType::Shader ||
-             self.filter_project_type == ModrinthProjectType::Resourcepack;
+        let is_mod = self.filter_project_type == ModrinthProjectType::Mod || self.filter_project_type == ModrinthProjectType::Modpack;
         if !self.filter_loaders.is_empty() && is_mod {
             facets.push_str(",[");
 
@@ -720,10 +717,7 @@ impl Render for ModrinthSearchPage {
                 _ => {},
             }));
 
-        let loader_button_group = if self.filter_project_type == ModrinthProjectType::Mod ||
-             self.filter_project_type == ModrinthProjectType::Modpack ||
-             self.filter_project_type == ModrinthProjectType::Shader ||
-             self.filter_project_type == ModrinthProjectType::Resourcepack {
+        let loader_button_group = if self.filter_project_type == ModrinthProjectType::Mod || self.filter_project_type == ModrinthProjectType::Modpack {
             Some(ButtonGroup::new("loader_group")
                 .layout(Axis::Vertical)
                 .outline()

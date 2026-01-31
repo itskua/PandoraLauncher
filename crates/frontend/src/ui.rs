@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bridge::{instance::InstanceID, message::MessageToBackend};
 use gpui::{prelude::*, *};
 use gpui_component::{
-    button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, resizable::{h_resizable, resizable_panel, ResizableState}, sidebar::{Sidebar, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem}, v_flex, ActiveTheme as _, Disableable, Icon, IconName, WindowExt
+    breadcrumb::{Breadcrumb, BreadcrumbItem}, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, resizable::{h_resizable, resizable_panel, ResizableState}, sidebar::{Sidebar, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem}, v_flex, ActiveTheme as _, Disableable, Icon, IconName, WindowExt
 };
 use rand::Rng;
 use schema::modrinth::ModrinthProjectType;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::{
     component::page_path::PagePath, entity::{
         DataEntities, instance::{InstanceAddedEvent, InstanceEntries, InstanceModifiedEvent, InstanceMovedToTopEvent, InstanceRemovedEvent}
-    }, interface_config::InterfaceConfig, modals, pages::{instance::instance_page::{InstancePage, InstanceSubpageType}, instances_page::InstancesPage, modrinth_page::ModrinthSearchPage, syncing_page::SyncingPage}, png_render_cache
+    }, interface_config::InterfaceConfig, modals, pages::{instance::instance_page::{InstancePage, InstanceSubpageType}, instances_page::InstancesPage, modrinth_page::ModrinthSearchPage, syncing_page::SyncingPage}, png_render_cache, root
 };
 
 pub struct LauncherUI {
@@ -303,7 +303,7 @@ impl Render for LauncherUI {
             )
         };
 
-        let pandora_icon = Icon::empty().path("icons/Lumina.svg");
+        let pandora_icon = Icon::empty().path("icons/pandora.svg");
 
         let footer = div().flex_grow().id("footer-button").child(SidebarFooter::new()
             .w_full()
@@ -471,7 +471,7 @@ impl Render for LauncherUI {
                     .justify_center()
                     .text_size(rems(0.9375))
                     .child(pandora_icon.size_8().min_w_8().min_h_8())
-                    .child("LuminaForge Launcher"),
+                    .child("Pandora"),
             )
             .footer(h_flex().flex_wrap().justify_center().w_full().child(settings_button).child(footer))
             .children(groups);

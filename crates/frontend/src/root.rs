@@ -8,7 +8,7 @@ use bridge::{
     modal_action::ModalAction,
 };
 use gpui::{prelude::*, *};
-use gpui_component::{scroll::ScrollableElement, v_flex, Root};
+use gpui_component::{breadcrumb::Breadcrumb, scroll::{ScrollableElement, ScrollbarAxis}, v_flex, Root, StyledExt};
 use parking_lot::RwLock;
 
 use crate::{entity::DataEntities, modals, ui::{LauncherUI, PageType}, CloseWindow, MAIN_FONT};
@@ -74,7 +74,7 @@ impl Render for LauncherRoot {
             .size_full()
             .font_family(MAIN_FONT)
             .when(has_csd_titlebar(window), |this| {
-                this.child(gpui_component::TitleBar::new().child("LuminaForge Launcher"))
+                this.child(gpui_component::TitleBar::new().child("Pandora"))
             })
             .child(self.ui.clone())
             .children(sheet_layer)

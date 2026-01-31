@@ -5,7 +5,7 @@ use bridge::{
     install::{ContentDownload, ContentInstall, ContentInstallFile, InstallTarget}, instance::{InstanceStatus, ContentType, ContentSummary}, message::{LogFiles, MessageToBackend, MessageToFrontend}, meta::MetadataResult, modal_action::{ModalAction, ModalActionVisitUrl, ProgressTracker, ProgressTrackerFinishType}, serial::AtomicOptionSerial
 };
 use futures::TryFutureExt;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use schema::{content::ContentSource, modrinth::ModrinthLoader, version::{LaunchArgument, LaunchArgumentValue}};
 use serde::Deserialize;
 use strum::IntoEnumIterator;
@@ -13,7 +13,7 @@ use tokio::{io::AsyncBufReadExt, sync::Semaphore};
 use ustr::Ustr;
 
 use crate::{
-    BackendState, LoginError, account::BackendAccount, arcfactory::ArcStrFactory, instance::ContentFolder, launch::{ArgumentExpansionKey, LaunchError}, log_reader, metadata::{items::{AssetsIndexMetadataItem, FabricLoaderManifestMetadataItem, ForgeInstallerMavenMetadataItem, MinecraftVersionManifestMetadataItem, MinecraftVersionMetadataItem, ModrinthProjectVersionsMetadataItem, ModrinthSearchMetadataItem, ModrinthV3VersionUpdateMetadataItem, ModrinthVersionUpdateMetadataItem, MojangJavaRuntimeComponentMetadataItem, MojangJavaRuntimesMetadataItem, NeoforgeInstallerMavenMetadataItem, VersionUpdateParameters, VersionV3LoaderFields, VersionV3UpdateParameters}, manager::MetaLoadError}, mod_metadata::ModUpdateAction
+    BackendState, LoginError, account::{BackendAccount, MinecraftLoginInfo}, arcfactory::ArcStrFactory, instance::ContentFolder, launch::{ArgumentExpansionKey, LaunchError}, log_reader, metadata::{items::{AssetsIndexMetadataItem, FabricLoaderManifestMetadataItem, ForgeInstallerMavenMetadataItem, MinecraftVersionManifestMetadataItem, MinecraftVersionMetadataItem, ModrinthProjectVersionsMetadataItem, ModrinthSearchMetadataItem, ModrinthV3VersionUpdateMetadataItem, ModrinthVersionUpdateMetadataItem, MojangJavaRuntimeComponentMetadataItem, MojangJavaRuntimesMetadataItem, NeoforgeInstallerMavenMetadataItem, VersionUpdateParameters, VersionV3LoaderFields, VersionV3UpdateParameters}, manager::MetaLoadError}, mod_metadata::ModUpdateAction
 };
 
 impl BackendState {
@@ -786,10 +786,6 @@ impl BackendState {
             MessageToBackend::GetBackendConfiguration { channel } => {
                 let configuration = self.config.write().get().clone();
                 _ = channel.send(configuration);
-            },
-            MessageToBackend::DetectJavaInstallations { channel } => {
-                let installations = crate::java_scanner::scan_java_installations().await;
-                _ = channel.send(installations);
             },
             MessageToBackend::CleanupOldLogFiles { instance: id } => {
                 let mut deleted = 0;

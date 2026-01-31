@@ -15,23 +15,23 @@ strip target/x86_64-apple-darwin/release/pandora_launcher
 
 mkdir -p dist
 
-lipo -create -output dist/LuminaForgeLauncher-macOS target/x86_64-apple-darwin/release/pandora_launcher target/aarch64-apple-darwin/release/pandora_launcher
+lipo -create -output dist/PandoraLauncher-macOS target/x86_64-apple-darwin/release/pandora_launcher target/aarch64-apple-darwin/release/pandora_launcher
 
 cargo install cargo-packager
 cargo packager --config '{'\
-'  "name": "lumina-forge-launcher",'\
+'  "name": "pandora-launcher",'\
 '  "outDir": "./dist",'\
 '  "formats": ["dmg", "app"],'\
-'  "productName": "LuminaForge Launcher",'\
+'  "productName": "Pandora Launcher",'\
 '  "version": "'"$version"'",'\
-'  "identifier": "com.moulberry.luminaforgelauncher",'\
+'  "identifier": "com.moulberry.pandoralauncher",'\
 '  "resources": [],'\
-'  "binaries": [{ "path": "LuminaForgeLauncher-macOS", "main": true }],'\
+'  "binaries": [{ "path": "PandoraLauncher-macOS", "main": true }],'\
 '  "icons": ["package/mac.icns"]'\
 '}'
 
-mv dist/LuminaForgeLauncher-macOS dist/LuminaForgeLauncher-macOS-$version-Universal
-mv dist/lumina-forge-launcher_*_universal.dmg dist/LuminaForgeLauncher-macOS-${version}-Universal.dmg
-tar -czf dist/LuminaForge.Launcher.app.tar.gz -C dist/ "LuminaForge Launcher.app"
+mv dist/PandoraLauncher-macOS dist/PandoraLauncher-macOS-$version-Universal
+mv dist/pandora-launcher_*_universal.dmg dist/PandoraLauncher-macOS-${version}-Universal.dmg
+tar -czf dist/Pandora.Launcher.app.tar.gz -C dist/ "Pandora Launcher.app"
 
 

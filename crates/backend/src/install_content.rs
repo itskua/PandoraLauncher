@@ -1,7 +1,7 @@
 use std::{ffi::{OsStr, OsString}, io::Write, path::{Path, PathBuf}, sync::Arc};
 
 use bridge::{
-    install::{ContentInstall, ContentInstallFile, ContentInstallPath}, instance::{ContentType, ContentSummary}, modal_action::{ModalAction, ProgressTracker, ProgressTrackerFinishType}, safe_path::SafePath
+    install::{ContentDownload, ContentInstall, ContentInstallFile, ContentInstallPath}, instance::{ContentType, ContentSummary}, modal_action::{ModalAction, ProgressTracker, ProgressTrackerFinishType}, safe_path::SafePath
 };
 use reqwest::StatusCode;
 use schema::{content::ContentSource, loader::Loader, modrinth::{ModrinthLoader, ModrinthProjectVersionsRequest}};
