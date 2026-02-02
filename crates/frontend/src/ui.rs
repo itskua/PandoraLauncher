@@ -9,13 +9,14 @@ use gpui_component::{
     input::{Input, InputState},
     resizable::{ResizablePanelEvent, ResizableState, h_resizable, resizable_panel},
     scroll::ScrollableElement,
-    sidebar::SidebarFooter,
+    sidebar::{SidebarFooter, Sidebar},
     v_flex,
 };
 use rand::Rng;
 use schema::modrinth::ModrinthProjectType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
 
 use crate::{
     component::{
