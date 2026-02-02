@@ -1,14 +1,32 @@
-use std::{ffi::OsString, path::{Path, PathBuf}, sync::Arc};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use enumset::{EnumSet, EnumSetType};
-use schema::{backend_config::{BackendConfig, SyncTarget}, instance::{InstanceConfiguration, InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration, InstanceMemoryConfiguration}, loader::Loader};
+use schema::{
+    backend_config::{BackendConfig, SyncTarget},
+    instance::{
+        InstanceConfiguration, InstanceJvmBinaryConfiguration, InstanceJvmFlagsConfiguration,
+        InstanceLinuxWrapperConfiguration, InstanceMemoryConfiguration,
+    },
+    loader::Loader, pandora_update::{UpdateManifest, UpdateManifestExe, UpdatePrompt},
+};
 use ustr::Ustr;
 use uuid::Uuid;
 
 use crate::{
-    account::Account, game_output::GameOutputLogLevel, install::ContentInstall, instance::{
-        InstanceID, InstanceContentID, InstanceContentSummary, InstanceServerSummary, InstanceStatus, InstanceWorldSummary,
-    }, keep_alive::{KeepAlive, KeepAliveHandle}, meta::{MetadataRequest, MetadataResult}, modal_action::ModalAction
+    account::Account,
+    game_output::GameOutputLogLevel,
+    install::ContentInstall,
+    instance::{
+        InstanceContentID, InstanceContentSummary, InstanceID, InstanceServerSummary, InstanceStatus,
+        InstanceWorldSummary,
+    },
+    keep_alive::{KeepAlive, KeepAliveHandle},
+    meta::{MetadataRequest, MetadataResult},
+    modal_action::ModalAction,
 };
 
 #[derive(Debug)]
@@ -52,6 +70,10 @@ pub enum MessageToBackend {
     SetInstanceJvmBinary {
         id: InstanceID,
         jvm_binary: InstanceJvmBinaryConfiguration,
+    },
+    SetInstanceLinuxWrapper {
+        id: InstanceID,
+        linux_wrapper: InstanceLinuxWrapperConfiguration,
     },
     KillInstance {
         id: InstanceID,
@@ -148,6 +170,10 @@ pub enum MessageToBackend {
         id: InstanceID,
         path: PathBuf
     },
+    InstallUpdate {
+        update: UpdatePrompt,
+        modal_action: ModalAction,
+    }
 }
 
 #[derive(Debug)]
@@ -215,6 +241,9 @@ pub enum MessageToFrontend {
         request: MetadataRequest,
         result: Result<MetadataResult, Arc<str>>,
         keep_alive_handle: Option<KeepAliveHandle>,
+    },
+    UpdateAvailable {
+        update: UpdatePrompt,
     },
 }
 

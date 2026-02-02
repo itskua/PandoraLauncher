@@ -20,6 +20,10 @@ pub struct InterfaceConfig {
     #[serde(default, deserialize_with = "schema::try_deserialize")]
     pub active_theme: SharedString,
     #[serde(default, deserialize_with = "schema::try_deserialize")]
+    pub main_window_bounds: WindowBounds,
+    #[serde(default, deserialize_with = "schema::try_deserialize")]
+    pub sidebar_width: f32,
+    #[serde(default, deserialize_with = "schema::try_deserialize")]
     pub main_page: SerializedPageType,
     #[serde(default, deserialize_with = "schema::try_deserialize")]
     pub page_path: Vec<SerializedPageType>,
@@ -35,7 +39,30 @@ pub struct InterfaceConfig {
     pub hide_main_window_on_launch: bool,
 }
 
-
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowBounds {
+    #[default]
+    Inherit,
+    Windowed {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
+    Maximized {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
+    Fullscreen {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
+}
 
 impl InterfaceConfig {
     pub fn init(cx: &mut App, path: Arc<Path>) {

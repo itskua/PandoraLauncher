@@ -1,3 +1,4 @@
+#!/bin/bash
 set -e
 
 if [ -z "$1" ]; then
@@ -6,6 +7,7 @@ if [ -z "$1" ]; then
 fi
 
 version=${1#v}
+export PANDORA_RELEASE_VERSION=$version
 
 echo "building release"
 cargo build --release --target x86_64-pc-windows-msvc
@@ -24,6 +26,7 @@ mkdir -p dist
 # copy exe (safer than mv on windows)
 cp "$EXE" dist/PandoraLauncher-Windows.exe
 
+# dont fail if already installed
 cargo install cargo-packager || true
 
 cargo packager --config '{'\

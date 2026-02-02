@@ -1,3 +1,4 @@
+#!/bin/bash
 set -e
 
 if [ -z "$1" ]; then
@@ -6,16 +7,25 @@ if [ -z "$1" ]; then
 fi
 
 version=${1#v}
+export PANDORA_RELEASE_VERSION=$version
 
-sudo apt-get update --yes && sudo apt-get install --yes libssl-dev libdbus-1-dev libx11-xcb1 libxkbcommon-x11-dev pkg-config inkscape
+sudo apt-get update --yes
+sudo apt-get install --yes \
+  libssl-dev libdbus-1-dev libx11-xcb1 libxkbcommon-x11-dev \
+  pkg-config inkscape
+
 cargo build --release --target x86_64-unknown-linux-gnu
+
 strip target/x86_64-unknown-linux-gnu/release/pandora_launcher
+
 mkdir -p dist
-mv target/x86_64-unknown-linux-gnu/release/pandora_launcher dist/PandoraLauncher-Linux
+cp target/x86_64-unknown-linux-gnu/release/pandora_launcher dist/PandoraLauncher-Linux
 
-inkscape --export-filename="package/icon_512x512.png" --export-width=512 "package/windows.svg"
+inkscape --export-filename="package/icon_512x512.png" \
+  --export-width=512 "package/windows.svg"
 
-cargo install cargo-packager
+cargo install cargo-packager || true
+
 cargo packager --config '{'\
 '  "name": "pandora-launcher",'\
 '  "outDir": "./dist",'\
