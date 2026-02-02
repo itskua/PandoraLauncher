@@ -1,20 +1,31 @@
 set -e
 
 if [ -z "$1" ]; then
-    echo "Missing version argument"
-    exit 1
+  echo "Missing version arg"
+  exit 1
 fi
 
 version=${1#v}
 
+echo "building release"
 cargo build --release --target x86_64-pc-windows-msvc
-strip target/x86_64-pc-windows-msvc/release/pandora_launcher.exe
+
+EXE=target/x86_64-pc-windows-msvc/release/pandora_launcher.exe
+
+echo "stripping exe (llvm)"
+if command -v llvm-strip >/dev/null 2>&1; then
+  llvm-strip "$EXE"
+else
+  echo "llvm-strip not found, skiping strip"
+fi
 
 mkdir -p dist
 
-mv target/x86_64-pc-windows-msvc/release/pandora_launcher dist/PandoraLauncher-Windows.exe
+# copy exe (safer than mv on windows)
+cp "$EXE" dist/PandoraLauncher-Windows.exe
 
-cargo install cargo-packager
+cargo install cargo-packager || true
+
 cargo packager --config '{'\
 '  "name": "pandora-launcher",'\
 '  "outDir": "./dist",'\
@@ -27,5 +38,15 @@ cargo packager --config '{'\
 '  "icons": ["package/windows.ico"]'\
 '}'
 
-mv dist/PandoraLauncher-Windows.exe dist/PandoraLauncher-Windows-$version-x86_64.exe
-mv dist/*_x64-setup.exe dist/PandoraLauncher-Windows-${version}_x64-setup.exe
+mv dist/PandoraLauncher-Windows.exe \
+   dist/PandoraLauncher-Windows-$version-x86_64.exe
+
+SETUP_EXE=$(ls dist/*_x64-setup.exe | head -n 1)
+
+if [ -z "$SETUP_EXE" ]; then
+  echo "setup exe not found"
+  exit 1
+fi
+
+mv "$SETUP_EXE" \
+   dist/PandoraLauncher-Windows-${version}_x64-setup.exe

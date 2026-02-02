@@ -303,7 +303,7 @@ impl Render for LauncherUI {
             )
         };
 
-        let pandora_icon = Icon::empty().path("icons/pandora.svg");
+        let lumina_icon = Icon::empty().path("icons/lumina.svg");
 
         let footer = div().flex_grow().id("footer-button").child(SidebarFooter::new()
             .w_full()
@@ -470,8 +470,8 @@ impl Render for LauncherUI {
                     .w_full()
                     .justify_center()
                     .text_size(rems(0.9375))
-                    .child(pandora_icon.size_8().min_w_8().min_h_8())
-                    .child("Pandora"),
+                    .child(lumina_icon.size_8().min_w_8().min_h_8())
+                    .child("LuminaForge"),
             )
             .footer(h_flex().flex_wrap().justify_center().w_full().child(settings_button).child(footer))
             .children(groups);
