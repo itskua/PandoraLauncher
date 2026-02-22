@@ -23,7 +23,6 @@ impl PagePath {
         for i in 0..pages.len() {
             let title = match pages[i] {
                 PageType::Instances => ts!("instance.title"),
-                PageType::Syncing => ts!("instance.sync.label"),
                 PageType::Modrinth { installing_for, .. } => {
                     if installing_for.is_some() {
                         ts!("instance.content.install.from_modrinth")
@@ -31,6 +30,8 @@ impl PagePath {
                         ts!("modrinth.name")
                     }
                 },
+                PageType::Import => "Import".into(),
+                PageType::Syncing => ts!("instance.sync.label"),
                 PageType::InstancePage(instance_id, _) => {
                     InstanceEntries::find_title_by_id(&data.instances, instance_id, cx)
                         .unwrap_or(ts!("instance.name_placeholder"))

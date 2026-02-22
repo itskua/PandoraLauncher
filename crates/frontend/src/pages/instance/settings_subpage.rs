@@ -487,7 +487,6 @@ impl InstanceSettingsSubpage {
             glfw: Self::create_lwjgl_library_path(&self.override_glfw_path, &*AUTO_LIBRARY_PATH_GLFW),
             override_openal: self.override_openal_enabled,
             openal: Self::create_lwjgl_library_path(&self.override_openal_path, &*AUTO_LIBRARY_PATH_OPENAL),
-
         }
     }
 

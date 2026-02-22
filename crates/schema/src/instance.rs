@@ -26,6 +26,22 @@ pub struct InstanceConfiguration {
     pub instance_fallback_icon: Option<Ustr>,
 }
 
+impl InstanceConfiguration {
+    pub fn new(minecraft_version: Ustr, loader: Loader) -> Self {
+        Self {
+            minecraft_version,
+            loader,
+            preferred_loader_version: None,
+            memory: None,
+            jvm_flags: None,
+            jvm_binary: None,
+            linux_wrapper: None,
+            system_libraries: None,
+            instance_fallback_icon: None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct InstanceMemoryConfiguration {
     pub enabled: bool,
