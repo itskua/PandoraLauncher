@@ -676,7 +676,7 @@ impl Render for InstanceSettingsSubpage {
                     }).w_full())
                 },
                 TypelessFrontendMetadataResult::Error(ref error) => {
-                    version_content = version_content.child(format!("{}: {}", ts!("instance.possible_loader_error"), error))
+                    version_content = version_content.child(format!("{}: {}", ts!("instance.versions_loading.possible_loader_error"), error))
                 },
             }
         }
