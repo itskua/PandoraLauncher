@@ -324,8 +324,8 @@ mod inner {
         keychain: SecKeychain,
     }
 
-    fn read(storage: &PlatformSecretStorage, key: &str) -> Result<Option<Vec<u8>>, SecretStorageError> {
-        let data = match storage.keychain.find_generic_password("com.moulberry.pandoralauncher", key) {
+    fn read(storage: &PlatformSecretStorage, target: &str) -> Result<Option<Vec<u8>>, SecretStorageError> {
+        let data = match storage.keychain.find_generic_password("com.moulberry.pandoralauncher", target) {
             Ok((data, _)) => data,
             Err(error) if error.code() == security_framework_sys::base::errSecItemNotFound => {
                 return Ok(None);
@@ -355,7 +355,7 @@ mod inner {
     }
 
     fn delete(storage: &PlatformSecretStorage, target: &str) -> Result<(), SecretStorageError> {
-        let item = match storage.keychain.find_generic_password("com.moulberry.pandoralauncher", uuid_str.as_str()) {
+        let item = match storage.keychain.find_generic_password("com.moulberry.pandoralauncher", target) {
             Ok((_, item)) => item,
             Err(error) if error.code() == security_framework_sys::base::errSecItemNotFound => {
                 return Ok(());
