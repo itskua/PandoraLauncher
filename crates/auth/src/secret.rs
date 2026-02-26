@@ -195,7 +195,7 @@ mod inner {
         Ok(Some(serde_json::from_slice(&bytes).map_err(|_| SecretStorageError::SerializationError)?))
     }
 
-    fn write(target: &str, bytes: Option<&mut [u8]>) -> Result<(), SecretStorageError> {
+    fn write(target: &str, bytes: Option<Vec<u8>>) -> Result<(), SecretStorageError> {
         let Some(bytes) = bytes else {
             return delete(target);
         };
@@ -222,7 +222,7 @@ mod inner {
         write(target, bytes)
     }
 
-    fn delete(target: &str) -> windows::core::Result<()> {
+    fn delete(target: &str) -> Result<(), SecretStorageError> {
         let mut target_name: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
 
         unsafe {
@@ -236,7 +236,7 @@ mod inner {
                 const ERROR_NOT_FOUND: windows::core::HRESULT =
                     windows::core::HRESULT::from_win32(windows::Win32::Foundation::ERROR_NOT_FOUND.0);
                 if error.code() == ERROR_NOT_FOUND {
-                    return Ok(None);
+                    return Ok(());
                 }
                 return Err(error.into());
             }
@@ -298,13 +298,13 @@ mod inner {
 
         pub async fn read_proxy_password(&self) -> Result<Option<String>, SecretStorageError> {
             let Some(bytes) = read("PandoraLauncher_ProxyPassword")? else {
-                return None;
+                return Ok(None);
             };
             Ok(Some(String::from_utf8(bytes).map_err(|_| SecretStorageError::SerializationError)?))
         }
 
         pub async fn write_proxy_password(&self, password: &str) -> Result<(), SecretStorageError> {
-            write("PandoraLauncher_ProxyPassword", Some(password.as_bytes()))
+            write("PandoraLauncher_ProxyPassword", Some(password.as_bytes().to_vec()))
         }
 
         pub async fn delete_proxy_password(&self) -> Result<(), SecretStorageError> {
