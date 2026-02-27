@@ -1,5 +1,6 @@
 pub mod content_list;
 pub mod error_alert;
+pub mod horizontal_sections;
 pub mod instance_dropdown;
 pub mod instance_list;
 pub mod menu;
