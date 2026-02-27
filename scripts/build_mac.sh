@@ -28,6 +28,7 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 '  "version": "'"$version"'",'\
 '  "identifier": "com.moulberry.pandoralauncher",'\
 '  "resources": [],'\
+'  "authors": ["Moulberry"],'\
 '  "binaries": [{ "path": "PandoraLauncher-macOS", "main": true }],'\
 '  "icons": ["package/mac.icns"]'\
 '}'

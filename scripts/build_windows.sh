@@ -24,6 +24,7 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 '  "version": "'"$version"'",'\
 '  "identifier": "com.moulberry.pandoralauncher",'\
 '  "resources": [],'\
+'  "authors": ["Moulberry"],'\
 '  "binaries": [{ "path": "PandoraLauncher-Windows.exe", "main": true }],'\
 '  "icons": ["package/windows.ico"]'\
 '}'
