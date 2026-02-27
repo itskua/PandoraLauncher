@@ -1,5 +1,6 @@
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{collections::{HashMap, HashSet}, path::Path, sync::Arc};
 
+use indexmap::IndexMap;
 use schema::{auxiliary::AuxDisabledChildren, content::ContentSource, modification::ModrinthModpackFileDownload};
 
 use crate::safe_path::SafePath;
@@ -93,6 +94,7 @@ pub enum ContentType {
         downloads: Arc<[ModrinthModpackFileDownload]>,
         summaries: Arc<[Option<Arc<ContentSummary>>]>,
         overrides: Arc<[(SafePath, Arc<[u8]>)]>,
+        dependencies: IndexMap<Arc<str>, Arc<str>>,
     },
     ResourcePack,
 }

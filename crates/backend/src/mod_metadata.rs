@@ -429,6 +429,7 @@ impl ModMetadataManager {
                 downloads: modrinth_index_json.files,
                 summaries: summaries.into(),
                 overrides: overrides.into_iter().collect(),
+                dependencies: modrinth_index_json.dependencies,
             }
         }))
     }

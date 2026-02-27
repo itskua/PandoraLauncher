@@ -350,7 +350,7 @@ impl InstallDialog {
                 .child(Button::new("create").success().label(create_instance_label).on_click(cx.listener(
                     |this, _, _, _| {
                         this.target = Some(InstallTarget::NewInstance {
-                            name: ts!("instance.new").into(),
+                            name: None,
                         });
                     },
                 )));
@@ -676,7 +676,7 @@ impl InstallDialog {
                             }
 
                             if let InstallTarget::NewInstance { name } = &mut target {
-                                *name = this.name.as_str().into();
+                                *name = Some(this.name.as_str().into());
                             }
 
                             let mut files = Vec::new();
