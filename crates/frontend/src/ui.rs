@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bridge::{instance::InstanceID, message::MessageToBackend};
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Disableable, Icon, WindowExt, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, notification::{Notification, NotificationType}, resizable::{ResizablePanelEvent, ResizableState, h_resizable, resizable_panel}, scroll::ScrollableElement, sidebar::SidebarFooter, tooltip::Tooltip, v_flex
+    ActiveTheme as _, Disableable, Icon, InteractiveElementExt, WindowExt, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, notification::{Notification, NotificationType}, resizable::{ResizablePanelEvent, ResizableState, h_resizable, resizable_panel}, scroll::ScrollableElement, sidebar::SidebarFooter, tooltip::Tooltip, v_flex
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -506,7 +506,7 @@ impl Render for LauncherUI {
             });
 
         let header = h_flex()
-            .pt_5()
+            .when_else(cfg!(target_os = "macos"), |this| this.pt(px(9.0)), |this| this.pt(px(14.0)))
             .px_5()
             .pb_2()
             .gap_2()
@@ -521,6 +521,14 @@ impl Render for LauncherUI {
             .w_full()
             .bg(cx.theme().sidebar)
             .text_color(cx.theme().sidebar_foreground)
+            .when(cfg!(target_os = "macos"), |this| {
+                this.child(h_flex()
+                    .id("sidebar-double-clicker")
+                    .w_full()
+                    .h(px(32.0))
+                    .on_double_click(|_, window, _| window.titlebar_double_click())
+                )
+            })
             .child(header)
             .child(v_flex()
                 .flex_1()

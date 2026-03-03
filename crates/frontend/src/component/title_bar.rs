@@ -1,5 +1,5 @@
 use gpui::{prelude::FluentBuilder, *};
-use gpui_component::{ActiveTheme, Colorize, h_flex};
+use gpui_component::{ActiveTheme, Colorize, InteractiveElementExt, h_flex};
 use once_cell::sync::Lazy;
 
 use crate::{component::page_path::PagePath, icon::PandoraIcon};
@@ -33,6 +33,12 @@ impl RenderOnce for TitleBar {
             .on_mouse_down_out(window.listener_for(&state, |state, _, _, _| {
                 state.should_move = false;
             }))
+            .when(cfg!(target_os = "linux"), |this| {
+                this.on_double_click(|_, window, _| window.zoom_window())
+            })
+            .when(cfg!(target_os = "macos"), |this| {
+                this.on_double_click(|_, window, _| window.titlebar_double_click())
+            })
             .on_mouse_down(
                 MouseButton::Left,
                 window.listener_for(&state, |state, _, _, _| {
@@ -69,22 +75,24 @@ impl RenderOnce for TitleBar {
                 })
                 .child(self.path)
                 .child(self.controls))
-            .child(h_flex().absolute().right_0().pr_4()
-                .gap_1()
-                .on_any_mouse_down(|_, window, cx| {
-                    if window.default_prevented() {
-                        cx.stop_propagation();
-                    }
-                })
-                .bg(cx.theme().background)
-                .h_full()
-                .when(window_controls.minimize, |this| this.child(WindowControl::Minimize))
-                .when(window_controls.maximize, |this| this.child(if window.is_maximized() {
-                    WindowControl::Restore
-                } else {
-                    WindowControl::Maximize
-                }))
-                .child(WindowControl::Close))
+            .when(!cfg!(target_os = "macos"), |this| {
+                this.child(h_flex().absolute().right_0().pr_4()
+                    .gap_1()
+                    .on_any_mouse_down(|_, window, cx| {
+                        if window.default_prevented() {
+                            cx.stop_propagation();
+                        }
+                    })
+                    .bg(cx.theme().background)
+                    .h_full()
+                    .when(window_controls.minimize, |this| this.child(WindowControl::Minimize))
+                    .when(window_controls.maximize, |this| this.child(if window.is_maximized() {
+                        WindowControl::Restore
+                    } else {
+                        WindowControl::Maximize
+                    }))
+                    .child(WindowControl::Close))
+            })
     }
 }
 
