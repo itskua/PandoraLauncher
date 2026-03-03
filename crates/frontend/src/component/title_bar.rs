@@ -153,6 +153,11 @@ impl RenderOnce for WindowControl {
     }
 }
 
+
+#[cfg(not(windows))]
+static ICON_FONT: Lazy<&'static str> = Lazy::new(|| "Segoe MDL2 Assets");
+
+#[cfg(windows)]
 static ICON_FONT: Lazy<&'static str> = Lazy::new(|| {
     let mut version = unsafe { std::mem::zeroed() };
     let status = unsafe {
