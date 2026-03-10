@@ -412,13 +412,14 @@ impl Render for LauncherUI {
                                 .gap_2()
                                 .w_full()
                                 .child(Button::new(account_name.clone())
-                                    .flex_grow()
+                                    .min_w_0()
+                                    .flex_1()
                                     .when(selected, |this| {
                                         this.info()
                                     })
                                     .h_10()
                                     .child(head.size_8().min_w_8().min_h_8())
-                                    .child(account_name.clone())
+                                    .child(div().pt_0p5().line_clamp(2).line_height(rems(1.0)).child(account_name.clone()))
                                     .when(!selected, |this| {
                                         this.on_click({
                                             let backend_handle = backend_handle.clone();
