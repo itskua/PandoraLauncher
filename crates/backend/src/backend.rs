@@ -1155,7 +1155,6 @@ impl BackendStateFileWatching {
         };
 
         let canonical: Arc<Path> = if canonical == &*path {
-            log::debug!("Watching {:?} as {:?}", path, target);
             path.clone()
         } else {
             let is_just_long_path_prefixed = if cfg!(windows) {
@@ -1168,10 +1167,8 @@ impl BackendStateFileWatching {
                 false
             };
             if is_just_long_path_prefixed {
-                log::debug!("Watching {:?} as {:?}", path, target);
                 path.clone()
             } else {
-                log::debug!("Watching {:?} (real path {:?}) as {:?}", path, canonical, target);
                 canonical.into()
             }
         };
@@ -1181,6 +1178,12 @@ impl BackendStateFileWatching {
             if old_canonical == canonical {
                 return;
             }
+        }
+
+        if path == canonical {
+            log::debug!("Watching {:?} as {:?}", path, target);
+        } else {
+            log::debug!("Watching {:?} (real path {:?}) as {:?}", path, canonical, target);
         }
 
         if let Err(err) = self.watcher.watch(&path, notify::RecursiveMode::NonRecursive) {
