@@ -38,10 +38,10 @@ mv -f dist/PandoraLauncher*.dmg dist/PandoraLauncher.dmg
 tar -czf dist/PandoraLauncher.app.tar.gz dist/PandoraLauncher.app
 rm -r dist/PandoraLauncher.app
 
-if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
-    cargo packager signer sign dist/PandoraLauncher-macOS-Universal-Portable
-    cargo packager signer sign dist/PandoraLauncher.dmg
-    cargo packager signer sign dist/PandoraLauncher.app.tar.gz
+# CHANGED: always run manifest block
+if true; then
+    # REMOVED signing
+    # cargo packager signer sign ...
 
     echo "{
     \"version\": \"$version\",
@@ -51,17 +51,15 @@ if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
                 \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-macOS-Universal-Portable\",
                 \"size\": $(wc -c < dist/PandoraLauncher-macOS-Universal-Portable),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-macOS-Universal-Portable | cut -d ' ' -f 1)\",
-                \"sig\": \"$(cat dist/PandoraLauncher-macOS-Universal-Portable.sig)\"
+                \"sig\": \"\"
             },
             \"app\": {
                 \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher.app.tar.gz\",
                 \"size\": $(wc -c < dist/PandoraLauncher.app.tar.gz),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher.app.tar.gz | cut -d ' ' -f 1)\",
-                \"sig\": \"$(cat dist/PandoraLauncher.app.tar.gz.sig)\"
+                \"sig\": \"\"
             }
         }
     }
 }" > dist/update_manifest_macos.json
-
-    rm dist/*.sig
 fi

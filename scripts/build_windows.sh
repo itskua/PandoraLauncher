@@ -32,8 +32,10 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 mv -f dist/PandoraLauncher-Windows-x86_64.exe dist/PandoraLauncher-Windows-x86_64-Portable.exe
 mv -f 'dist/PandoraLauncher-Windows-x86_64_'$version'_x64-setup.exe' dist/PandoraLauncher-Windows-x86_64-Setup.exe
 
-if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
-    cargo packager signer sign dist/PandoraLauncher-Windows-x86_64-Portable.exe
+# CHANGED: always generate manifest
+if true; then
+    # REMOVED signing
+    # cargo packager signer sign ...
 
     echo "{
     \"version\": \"$version\",
@@ -43,11 +45,9 @@ if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
                 \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-Windows-x86_64-Portable.exe\",
                 \"size\": $(wc -c < dist/PandoraLauncher-Windows-x86_64-Portable.exe),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-Windows-x86_64-Portable.exe | cut -d ' ' -f 1)\",
-                \"sig\": \"$(cat dist/PandoraLauncher-Windows-x86_64-Portable.exe.sig)\"
+                \"sig\": \"\"
             }
         }
     }
 }" > dist/update_manifest_windows.json
-
-    rm dist/*.sig
 fi

@@ -32,9 +32,11 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 mv -f dist/PandoraLauncher-Linux-x86_64 dist/PandoraLauncher-Linux-x86_64-Portable
 mv -f 'dist/PandoraLauncher-Linux-x86_64_'$version'_x86_64.AppImage' dist/PandoraLauncher-Linux-x86_64.AppImage
 
-if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
-    cargo packager signer sign dist/PandoraLauncher-Linux-x86_64-Portable
-    cargo packager signer sign dist/PandoraLauncher-Linux-x86_64.AppImage
+# CHANGED: removed key check so manifest ALWAYS generates
+if true; then
+    # REMOVED: signing (no key in CI)
+    # cargo packager signer sign dist/PandoraLauncher-Linux-x86_64-Portable
+    # cargo packager signer sign dist/PandoraLauncher-Linux-x86_64.AppImage
 
     echo "{
     \"version\": \"$version\",
@@ -44,17 +46,15 @@ if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
                 \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-Linux-x86_64-Portable\",
                 \"size\": $(wc -c < dist/PandoraLauncher-Linux-x86_64-Portable),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-Linux-x86_64-Portable | cut -d ' ' -f 1)\",
-                \"sig\": \"$(cat dist/PandoraLauncher-Linux-x86_64-Portable.sig)\"
+                \"sig\": \"\"  // REMOVED: no .sig file
             },
             \"appimage\": {
                 \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-Linux-x86_64.AppImage\",
                 \"size\": $(wc -c < dist/PandoraLauncher-Linux-x86_64.AppImage),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-Linux-x86_64.AppImage | cut -d ' ' -f 1)\",
-                \"sig\": \"$(cat dist/PandoraLauncher-Linux-x86_64.AppImage.sig)\"
+                \"sig\": \"\"  // REMOVED: no .sig file
             }
         }
     }
 }" > dist/update_manifest_linux.json
-
-    rm dist/*.sig
 fi
