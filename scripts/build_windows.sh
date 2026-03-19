@@ -22,9 +22,9 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 '  "outDir": "./dist",'\
 '  "productName": "Pandora Launcher",'\
 '  "version": "'"$version"'",'\
-'  "identifier": "com.moulberry.pandoralauncher",'\
+'  "identifier": "com.itskua.pandoralauncher",'\
 '  "resources": [],'\
-'  "authors": ["Moulberry"],'\
+'  "authors": ["itskua"],'\
 '  "binaries": [{ "path": "PandoraLauncher-Windows-x86_64.exe", "main": true }],'\
 '  "icons": ["package/windows.ico"]'\
 '}'
@@ -40,7 +40,7 @@ if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
     \"downloads\": {
         \"x86_64\": {
             \"executable\": {
-                \"download\": \"https://github.com/Moulberry/PandoraLauncher/releases/download/v$version/PandoraLauncher-Windows-x86_64-Portable.exe\",
+                \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-Windows-x86_64-Portable.exe\",
                 \"size\": $(wc -c < dist/PandoraLauncher-Windows-x86_64-Portable.exe),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-Windows-x86_64-Portable.exe | cut -d ' ' -f 1)\",
                 \"sig\": \"$(cat dist/PandoraLauncher-Windows-x86_64-Portable.exe.sig)\"

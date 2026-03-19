@@ -26,9 +26,9 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 '  "formats": ["dmg", "app"],'\
 '  "productName": "PandoraLauncher",'\
 '  "version": "'"$version"'",'\
-'  "identifier": "com.moulberry.pandoralauncher",'\
+'  "identifier": "com.itskua.pandoralauncher",'\
 '  "resources": [],'\
-'  "authors": ["Moulberry"],'\
+'  "authors": ["itskua"],'\
 '  "binaries": [{ "path": "PandoraLauncher-macOS-Universal", "main": true }],'\
 '  "icons": ["package/mac.icns"]'\
 '}'
@@ -48,13 +48,13 @@ if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
     \"downloads\": {
         \"universal\": {
             \"executable\": {
-                \"download\": \"https://github.com/Moulberry/PandoraLauncher/releases/download/v$version/PandoraLauncher-macOS-Universal-Portable\",
+                \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-macOS-Universal-Portable\",
                 \"size\": $(wc -c < dist/PandoraLauncher-macOS-Universal-Portable),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-macOS-Universal-Portable | cut -d ' ' -f 1)\",
                 \"sig\": \"$(cat dist/PandoraLauncher-macOS-Universal-Portable.sig)\"
             },
             \"app\": {
-                \"download\": \"https://github.com/Moulberry/PandoraLauncher/releases/download/v$version/PandoraLauncher.app.tar.gz\",
+                \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher.app.tar.gz\",
                 \"size\": $(wc -c < dist/PandoraLauncher.app.tar.gz),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher.app.tar.gz | cut -d ' ' -f 1)\",
                 \"sig\": \"$(cat dist/PandoraLauncher.app.tar.gz.sig)\"

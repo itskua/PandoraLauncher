@@ -22,9 +22,9 @@ env -u CARGO_PACKAGER_SIGN_PRIVATE_KEY cargo packager --config '{'\
 '  "formats": ["deb", "appimage"],'\
 '  "productName": "Pandora Launcher",'\
 '  "version": "'"$version"'",'\
-'  "identifier": "com.moulberry.pandoralauncher",'\
+'  "identifier": "com.itskua.pandoralauncher",'\
 '  "resources": [],'\
-'  "authors": ["Moulberry"],'\
+'  "authors": ["itskua"],'\
 '  "binaries": [{ "path": "PandoraLauncher-Linux-x86_64", "main": true }],'\
 '  "icons": ["package/windows_icons/icon_16x16.png", "package/windows_icons/icon_32x32.png", "package/windows_icons/icon_48x48.png", "package/windows_icons/icon_256x256.png"]'\
 '}'
@@ -41,13 +41,13 @@ if [[ -n "$CARGO_PACKAGER_SIGN_PRIVATE_KEY" ]]; then
     \"downloads\": {
         \"x86_64\": {
             \"executable\": {
-                \"download\": \"https://github.com/Moulberry/PandoraLauncher/releases/download/v$version/PandoraLauncher-Linux-x86_64-Portable\",
+                \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-Linux-x86_64-Portable\",
                 \"size\": $(wc -c < dist/PandoraLauncher-Linux-x86_64-Portable),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-Linux-x86_64-Portable | cut -d ' ' -f 1)\",
                 \"sig\": \"$(cat dist/PandoraLauncher-Linux-x86_64-Portable.sig)\"
             },
             \"appimage\": {
-                \"download\": \"https://github.com/Moulberry/PandoraLauncher/releases/download/v$version/PandoraLauncher-Linux-x86_64.AppImage\",
+                \"download\": \"https://github.com/itskua/PandoraLauncher/releases/download/v$version/PandoraLauncher-Linux-x86_64.AppImage\",
                 \"size\": $(wc -c < dist/PandoraLauncher-Linux-x86_64.AppImage),
                 \"sha1\": \"$(sha1sum dist/PandoraLauncher-Linux-x86_64.AppImage | cut -d ' ' -f 1)\",
                 \"sig\": \"$(cat dist/PandoraLauncher-Linux-x86_64.AppImage.sig)\"
